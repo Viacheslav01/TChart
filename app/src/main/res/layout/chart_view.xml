@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<android.widget.LinearLayout
+        xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical" android:paddingLeft="16dp" android:paddingRight="16dp">
+
+    <TextView
+            android:id="@+id/chart_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="17sp"
+            android:text="Followers"
+            android:textColor="#389694"/>
+
+    <ru.smityukh.tchart.view.ChartMainView
+            android:id="@+id/chart_main"
+            android:layout_width="match_parent"
+            android:background="#33FF0000"
+            android:layout_height="300dp"/>
+
+    <ru.smityukh.tchart.view.ChartPeriodView
+            android:id="@+id/chart_period"
+            android:layout_width="match_parent"
+            android:background="#3300FF00"
+            android:layout_height="50dp"/>
+
+    <ListView
+            android:id="@+id/chart_selector"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#330000FF"/>
+
+</android.widget.LinearLayout>
