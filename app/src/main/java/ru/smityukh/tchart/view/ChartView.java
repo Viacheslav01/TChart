@@ -58,123 +58,16 @@ public class ChartView extends LinearLayout {
             mChartHeaderView = findViewById(R.id.chart_header);
             mChartMainView = findViewById(R.id.chart_main);
             mChartPeriodView = findViewById(R.id.chart_period);
-            mChartSelector = new ChartSelectorController((RecyclerView) findViewById(R.id.chart_selector));
+            mChartSelector = new ChartSelectorController(findViewById(R.id.chart_selector));
+
+            mChartSelector.setOnCheckedChangedCallback((position, checked) -> {
+                mChartPeriodView.setChartVisibility(position, checked);
+            });
         }
 
         void setData(@NonNull ChartData data) {
             mChartPeriodView.setData(data);
             mChartSelector.setData(data);
-        }
-    }
-
-    private static class ChartSelectorController {
-        @NonNull
-        private RecyclerView mRecyclerView;
-        @Nullable
-        private Adapter mAdapter;
-
-        ChartSelectorController(@NonNull RecyclerView recyclerView) {
-            mRecyclerView = recyclerView;
-
-            recyclerView.setHasFixedSize(true);
-
-            recyclerView.addItemDecoration(new DividerItemDecoration(recyclerView.getContext(), DividerItemDecoration.VERTICAL));
-
-            RecyclerView.LayoutManager layoutManager = new LinearLayoutManager(recyclerView.getContext());
-            recyclerView.setLayoutManager(layoutManager);
-        }
-
-        void setData(@NonNull ChartData data) {
-            mAdapter = new Adapter(data, this::onCheckedChanged);
-            mRecyclerView.setAdapter(mAdapter);
-        }
-
-        @Nullable
-        boolean[] getCheckedState() {
-            if (mAdapter == null) {
-                return null;
-            }
-
-            return mAdapter.mCheckedItems.clone();
-        }
-
-        private void onCheckedChanged(int position, boolean checked) {
-
-        }
-
-        private static class Adapter extends RecyclerView.Adapter<ViewHolder> {
-
-            @NonNull
-            private final ChartData mChartData;
-            @NonNull
-            private OnCheckedChangedCallback mCallback;
-
-            @NonNull
-            private final boolean[] mCheckedItems;
-
-            Adapter(@NonNull ChartData chartData, @NonNull OnCheckedChangedCallback callback) {
-                mChartData = chartData;
-                mCallback = callback;
-
-                mCheckedItems = new boolean[mChartData.mNames.length];
-                for (int index = 0; index < mCheckedItems.length; index++) {
-                    mCheckedItems[index] = true;
-                }
-            }
-
-            private void onCheckedChanged(int position, boolean checked) {
-                if (mCheckedItems[position] == checked) {
-                    return;
-                }
-
-                mCheckedItems[position] = checked;
-                mCallback.onCheckedChanged(position, checked);
-            }
-
-            @NonNull
-            @Override
-            public ViewHolder onCreateViewHolder(@NonNull ViewGroup viewGroup, int position) {
-
-                CheckBox checkBox = (CheckBox) LayoutInflater
-                        .from(viewGroup.getContext())
-                        .inflate(R.layout.chart_selector_item, viewGroup, false);
-
-                return new ViewHolder(checkBox, this::onCheckedChanged);
-            }
-
-            @Override
-            public void onBindViewHolder(@NonNull ViewHolder viewHolder, int position) {
-                CheckBox checkBox = viewHolder.mCheckBox;
-
-                checkBox.setText(mChartData.mNames[position]);
-                checkBox.setChecked(mCheckedItems[position]);
-
-                int states[][] = {{android.R.attr.state_checked}, {}};
-                int colors[] = {mChartData.mColors[position], mChartData.mColors[position]};
-                CompoundButtonCompat.setButtonTintList(checkBox, new ColorStateList(states, colors));
-            }
-
-            @Override
-            public int getItemCount() {
-                return mChartData.mNames.length;
-            }
-        }
-
-        private static class ViewHolder extends RecyclerView.ViewHolder {
-
-            @NonNull
-            private final CheckBox mCheckBox;
-
-            ViewHolder(@NonNull CheckBox checkBox, @NonNull final OnCheckedChangedCallback callback) {
-                super(checkBox);
-                mCheckBox = checkBox;
-
-                mCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> callback.onCheckedChanged(getAdapterPosition(), isChecked));
-            }
-        }
-
-        interface OnCheckedChangedCallback {
-            void onCheckedChanged(int position, boolean checked);
         }
     }
 }

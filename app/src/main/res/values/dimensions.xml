@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <resources>
-    <dimen name="period_line_width">2dp</dimen>
+    <dimen name="period_line_width">1dp</dimen>
 </resources>

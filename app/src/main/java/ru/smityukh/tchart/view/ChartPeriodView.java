@@ -19,6 +19,9 @@ public class ChartPeriodView extends View {
     private int mLineWidth;
     private int mVerticatPadding;
 
+    @Nullable
+    private ChartsRender mChartsRender;
+
     public ChartPeriodView(Context context) {
         super(context);
 
@@ -62,15 +65,20 @@ public class ChartPeriodView extends View {
         drawCharts(canvas);
     }
 
-    @Nullable
-    private ChartsRender mChartsRender;
-
     private void drawCharts(@NonNull Canvas canvas) {
         if (mChartsRender == null) {
             return;
         }
 
         mChartsRender.render(canvas);
+    }
+
+    public void setChartVisibility(int position, boolean visible) {
+        if (mChartsRender == null) {
+            return;
+        }
+
+        mChartsRender.setChartVisibility(position, visible);
     }
 
     private static class ChartsRender {
@@ -172,11 +180,13 @@ public class ChartPeriodView extends View {
         private void prepareDrawData() {
             if (mViewWidth <= 0 || mViewHeight <= 0) {
                 mHasDrawData = false;
+                mView.invalidate();
                 return;
             }
 
             if (mColumnsCount <= 0) {
                 mHasDrawData = false;
+                mView.invalidate();
                 return;
             }
 
@@ -216,6 +226,8 @@ public class ChartPeriodView extends View {
                     linePosition += 4;
                 }
             }
+
+            mView.invalidate();
         }
 
         void render(@NonNull Canvas canvas) {
@@ -230,7 +242,10 @@ public class ChartPeriodView extends View {
 
             int lineOffset = 0;
             for (int index = 0; index < mChartsCount; index++) {
-                canvas.drawLines(mLines, lineOffset << 2, mLinesCount << 2, mChartPaints[index]);
+                if (mChartVisible[index]) {
+                    canvas.drawLines(mLines, lineOffset << 2, mLinesCount << 2, mChartPaints[index]);
+                }
+
                 lineOffset += mLinesCount;
             }
 
@@ -282,6 +297,21 @@ public class ChartPeriodView extends View {
             paint.setStrokeCap(Paint.Cap.ROUND);
 
             return paint;
+        }
+
+        void setChartVisibility(int position, boolean visible) {
+            if (position < 0 || position >= mChartsCount) {
+                throw new IllegalArgumentException("Position is out of range");
+            }
+
+            if (mChartVisible[position] == visible) {
+                return;
+            }
+
+            mChartVisible[position] = visible;
+
+            // TODO: I have to implement incremental update here is not necessary to recalculate the whole data
+            prepareDrawData();
         }
     }
 }
