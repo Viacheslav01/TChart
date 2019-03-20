@@ -16,13 +16,13 @@
     <ru.smityukh.tchart.view.ChartMainView
             android:id="@+id/chart_main"
             android:layout_width="match_parent"
-            android:background="#33FF0000"
+            android:background="#11FF0000"
             android:layout_height="300dp"/>
 
     <ru.smityukh.tchart.view.ChartPeriodView
             android:id="@+id/chart_period"
             android:layout_width="match_parent"
-            android:background="#3300FF00"
+            android:background="#1100FF00"
             android:layout_height="50dp"/>
 
     <android.support.v7.widget.RecyclerView
@@ -30,6 +30,6 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:background="#330000FF"/>
+            android:background="#110000FF"/>
 
 </android.widget.LinearLayout>

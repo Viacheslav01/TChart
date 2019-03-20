@@ -11,13 +11,12 @@ import android.view.View;
 import ru.smityukh.tchart.R;
 import ru.smityukh.tchart.data.ChartData;
 
-public class ChartPeriodView extends View {
-    // 1) Выбор периода
+class ChartPeriodView extends View {
 
     private static final String TAG = "ChartPeriodView";
 
     private int mLineWidth;
-    private int mVerticatPadding;
+    private int mSetVerticalChartOffset;
 
     @Nullable
     private ChartsRender mChartsRender;
@@ -39,13 +38,14 @@ public class ChartPeriodView extends View {
     }
 
     private void init(Context context) {
-        mLineWidth = context.getResources().getDimensionPixelSize(R.dimen.period_line_width);
-        mVerticatPadding = mLineWidth;
+        mLineWidth = context.getResources().getDimensionPixelSize(R.dimen.period_selector_view_line_width);
+        mSetVerticalChartOffset = context.getResources().getDimensionPixelSize(R.dimen.period_selector_view_vertical_chart_offset);
     }
 
-    public void setData(@NonNull ChartData data) {
+    void setData(@NonNull ChartData data) {
         mChartsRender = new ChartsRender(data, this);
         mChartsRender.setLineWidth(mLineWidth);
+        mChartsRender.setVerticalChartOffset(mSetVerticalChartOffset);
         mChartsRender.setViewSize(getWidth(), getHeight());
     }
 
@@ -91,6 +91,8 @@ public class ChartPeriodView extends View {
         private int mChartsCount;
         private int mColumnsCount;
         private int mLinesCount;
+
+        private int mSetVerticalChartOffset;
 
         private Paint[] mChartPaints;
 
@@ -196,10 +198,10 @@ public class ChartPeriodView extends View {
             long maxValue = getMaxValue();
 
             long range = maxValue - minValue;
-            float yScale = ((float) mViewHeight) / range;
+            float yScale = ((float) mViewHeight - mSetVerticalChartOffset * 2) / range;
             float xStepSize = ((float) mViewWidth) / mLinesCount;
 
-            mYOffset = maxValue * yScale;
+            mYOffset = maxValue * yScale + mSetVerticalChartOffset;
 
             int linePosition = 0;
 
@@ -311,6 +313,11 @@ public class ChartPeriodView extends View {
             mChartVisible[position] = visible;
 
             // TODO: I have to implement incremental update here is not necessary to recalculate the whole data
+            prepareDrawData();
+        }
+
+        public void setVerticalChartOffset(int setVerticalChartOffset) {
+            mSetVerticalChartOffset = setVerticalChartOffset;
             prepareDrawData();
         }
     }

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <resources>
-    <dimen name="period_line_width">1dp</dimen>
+    <dimen name="period_selector_view_line_width">1dp</dimen>
+    <dimen name="period_selector_view_vertical_chart_offset">3dp</dimen>
 </resources>
