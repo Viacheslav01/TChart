@@ -20,6 +20,11 @@ class ChartPeriodView extends View {
 
     @Nullable
     private ChartsRender mChartsRender;
+    @NonNull
+    private SelectionRender mSelectionRender = new SelectionRender();
+
+    @NonNull
+    private final SelectionController mSelectionController = new SelectionController();
 
     public ChartPeriodView(Context context) {
         super(context);
@@ -63,6 +68,8 @@ class ChartPeriodView extends View {
         super.onDraw(canvas);
 
         drawCharts(canvas);
+
+        mSelectionRender.draw(canvas);
     }
 
     private void drawCharts(@NonNull Canvas canvas) {
@@ -319,6 +326,58 @@ class ChartPeriodView extends View {
         public void setVerticalChartOffset(int setVerticalChartOffset) {
             mSetVerticalChartOffset = setVerticalChartOffset;
             prepareDrawData();
+        }
+    }
+
+    private class SelectionController {
+        float mSelectionStart = 0.3f;
+        float mSelectionEnd = 0.6f;
+    }
+
+    private class SelectionRender {
+
+        public void draw(@NonNull Canvas canvas) {
+            int width = getWidth();
+            int height = getHeight();
+
+            boolean hasUnselectedHead = false;
+            boolean hasUnselectedTail = false;
+
+            float startX;
+            float endX;
+
+            if (mSelectionController.mSelectionStart <= 0.01) {
+                startX = 0;
+            } else {
+                hasUnselectedHead = true;
+                startX = width * mSelectionController.mSelectionStart;
+            }
+
+            if (mSelectionController.mSelectionEnd >= 0.99) {
+                endX = width;
+            } else {
+                hasUnselectedTail = true;
+                endX = width * mSelectionController.mSelectionEnd;
+            }
+
+            Paint unselectedPaint = new Paint();
+            unselectedPaint.setColor(0xB2F0F3F4);
+
+            Paint framePaint = new Paint();
+            framePaint.setColor(0x26325A96);
+
+            canvas.drawRect(startX, 0, startX + 15, height, framePaint);
+            canvas.drawRect(startX + 15, 0, endX - 15, 3, framePaint);
+            canvas.drawRect(startX + 15, height - 3, endX - 15, height, framePaint);
+            canvas.drawRect(endX - 15, 0, endX, height, framePaint);
+
+            if (hasUnselectedHead) {
+                canvas.drawRect(0, 0, startX -1, height, unselectedPaint);
+            }
+
+            if (hasUnselectedTail) {
+                canvas.drawRect(endX + 1, 0, width, height, unselectedPaint);
+            }
         }
     }
 }

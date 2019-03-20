@@ -22,14 +22,12 @@
     <ru.smityukh.tchart.view.ChartPeriodView
             android:id="@+id/chart_period"
             android:layout_width="match_parent"
-            android:background="#1100FF00"
             android:layout_height="50dp"/>
 
     <android.support.v7.widget.RecyclerView
             android:id="@+id/chart_selector"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:background="#110000FF"/>
+            android:layout_weight="1"/>
 
 </android.widget.LinearLayout>
