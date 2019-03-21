@@ -29,7 +29,7 @@ public class MainActivity extends AppCompatActivity {
         try {
             chartData = dataReader.readData(this);
         } catch (IOException | WrongChartDataJsonException | IllegalStateException ex) {
-            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG);
+            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
         }
 
         if (chartData == null) {

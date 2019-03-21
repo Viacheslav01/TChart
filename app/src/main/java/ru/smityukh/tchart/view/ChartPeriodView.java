@@ -4,9 +4,12 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
+import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 
 import ru.smityukh.tchart.R;
@@ -50,6 +53,20 @@ class ChartPeriodView extends View {
         mSetVerticalChartOffset = context.getResources().getDimensionPixelSize(R.dimen.period_selector_view_vertical_chart_offset);
     }
 
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        Log.e("FUCK", "onTouchEvent: " + event.toString());
+
+//        if (mSelectionController.mGestureDetector.onTouchEvent(event)) {
+//            //Log.e("FUCK", "onTouchEvent: handled");
+//            return true;
+//        }
+
+        //Log.e("FUCK", "onTouchEvent: NOT handled");
+
+        return true;//super.onTouchEvent(event);
+    }
+
     void setData(@NonNull ChartData data) {
         mChartData = data;
 
@@ -58,7 +75,7 @@ class ChartPeriodView extends View {
         mChartsRender.setVerticalChartOffset(mSetVerticalChartOffset);
         mChartsRender.setViewSize(getWidth(), getHeight());
 
-        mSelectionRender.setViewSize(getWidth(), getHeight());
+        mSelectionController.setViewSize(getWidth(), getHeight());
     }
 
     @Override
@@ -69,7 +86,7 @@ class ChartPeriodView extends View {
             mChartsRender.setViewSize(width, height);
         }
 
-        mSelectionRender.setViewSize(width, height);
+        mSelectionController.setViewSize(width, height);
     }
 
     @Override
@@ -246,7 +263,7 @@ class ChartPeriodView extends View {
                 float x = 0;
 
                 // Extract  the first line to remove float a multiplication from cycle
-                mLines[linePosition + 0] = x;
+                mLines[linePosition] = x;
                 x += xStepSize;
                 mLines[linePosition + 1] = values[0] * yScale;
                 mLines[linePosition + 2] = x;
@@ -255,7 +272,7 @@ class ChartPeriodView extends View {
                 linePosition += 4;
 
                 for (int column = 1; column < mLinesCount; column++) {
-                    mLines[linePosition + 0] = x;
+                    mLines[linePosition] = x;
                     x += xStepSize;
                     mLines[linePosition + 1] = mLines[linePosition - 1];
                     mLines[linePosition + 2] = x;
@@ -339,43 +356,23 @@ class ChartPeriodView extends View {
     }
 
     private class SelectionController {
+
         float mSelectionStart = 0.0f;
         float mSelectionEnd = 1.0f;
-    }
-
-    private class SelectionRender {
-        @NonNull
-        private final Paint mUnselectedPaint;
-        @NonNull
-        private final Paint mFramePaint;
-
-        private final int mFrameHorizontalLineHeight;
-        private final int mFrameVerticalLineWidth;
-
-        private boolean mHasDrawData;
 
         private int mViewWidth;
         private int mViewHeight;
 
-        private boolean mHasUnselectedHead;
-        private boolean mHasUnselectedTail;
+        private final int mFrameVerticalLineWidth;
 
-        private float mStartX;
-        private float mStartXFrame;
+        @NonNull
+        private final Rect mStartBarRect = new Rect();
+        @NonNull
+        private final Rect mEndBarRect = new Rect();
 
-        private float mEndX;
-        private float mEndXFrame;
-
-        SelectionRender() {
+        SelectionController() {
             Resources resources = getContext().getResources();
 
-            mUnselectedPaint = new Paint();
-            mUnselectedPaint.setColor(resources.getColor(R.color.colorUnselectedPeriodYashmak));
-
-            mFramePaint = new Paint();
-            mFramePaint.setColor(resources.getColor(R.color.colorSelectedPeriodFrame));
-
-            mFrameHorizontalLineHeight = resources.getDimensionPixelSize(R.dimen.period_selector_view_frame_horizontal_line_height);
             mFrameVerticalLineWidth = resources.getDimensionPixelSize(R.dimen.period_selector_view_frame_vertical_line_width);
         }
 
@@ -387,11 +384,83 @@ class ChartPeriodView extends View {
             mViewWidth = width;
             mViewHeight = height;
 
-            prepareDrawData();
+            updatePixelData();
         }
 
-        private void prepareDrawData() {
+        private void updatePixelData() {
             if (mViewWidth <= 0 || mViewHeight <= 0) {
+                mStartBarRect.setEmpty();
+                mEndBarRect.setEmpty();
+                mSelectionRender.prepareDrawData(0, 0);
+                return;
+            }
+
+            int startX;
+            int endX;
+
+            if (mSelectionController.mSelectionStart <= 0.01) {
+                startX = 0;
+            } else {
+                startX = (int) (mViewWidth * mSelectionController.mSelectionStart);
+            }
+
+            if (mSelectionController.mSelectionEnd >= 0.99) {
+                endX = mViewWidth;
+            } else {
+                endX = (int) (mViewWidth * mSelectionController.mSelectionEnd);
+            }
+
+            mStartBarRect.set(startX, 0, startX + mFrameVerticalLineWidth, mViewHeight);
+            mEndBarRect.set(endX - mFrameVerticalLineWidth, 0, endX, mViewHeight);
+
+            mSelectionRender.prepareDrawData(mViewWidth, mViewHeight);
+        }
+    }
+
+    private class SelectionRender {
+        private final int mFrameHorizontalLineHeight;
+
+        @NonNull
+        private final Paint mUnselectedPaint;
+        @NonNull
+        private final Paint mFramePaint;
+
+        @NonNull
+        private final Rect mUnselectedHeadRect = new Rect();
+        @NonNull
+        private final Rect mUnselectedTailRect = new Rect();
+
+        @NonNull
+        private final Rect mLeftFrameRect = new Rect();
+        @NonNull
+        private final Rect mTopFrameRect = new Rect();
+        @NonNull
+        private final Rect mRightFrameRect = new Rect();
+        @NonNull
+        private final Rect mBottomFrameRect = new Rect();
+
+        private boolean mHasDrawData;
+
+        SelectionRender() {
+            Resources resources = getContext().getResources();
+
+            mUnselectedPaint = new Paint();
+            mUnselectedPaint.setColor(resources.getColor(R.color.colorUnselectedPeriodYashmak));
+
+            mFramePaint = new Paint();
+            mFramePaint.setColor(resources.getColor(R.color.colorSelectedPeriodFrame));
+
+            mFrameHorizontalLineHeight = resources.getDimensionPixelSize(R.dimen.period_selector_view_frame_horizontal_line_height);
+        }
+
+        void prepareDrawData(int viewWidth, int viewHeight) {
+            if (viewWidth <= 0 || viewHeight <= 0) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            if (mSelectionController.mStartBarRect.isEmpty() || mSelectionController.mEndBarRect.isEmpty()) {
                 mHasDrawData = false;
                 invalidate();
                 return;
@@ -403,25 +472,22 @@ class ChartPeriodView extends View {
                 return;
             }
 
-            mHasUnselectedHead = false;
-            mHasUnselectedTail = false;
+            mLeftFrameRect.set(mSelectionController.mStartBarRect);
+            mRightFrameRect.set(mSelectionController.mEndBarRect);
+            mTopFrameRect.set(mLeftFrameRect.right, 0, mRightFrameRect.left, mFrameHorizontalLineHeight);
+            mBottomFrameRect.set(mLeftFrameRect.right, viewHeight - mFrameHorizontalLineHeight, mRightFrameRect.left, viewHeight);
 
-            if (mSelectionController.mSelectionStart <= 0.01) {
-                mStartX = 0;
+            if (mSelectionController.mStartBarRect.left > 0) {
+                mUnselectedHeadRect.set(0, 0, mLeftFrameRect.left - 1, viewHeight);
             } else {
-                mHasUnselectedHead = true;
-                mStartX = mViewWidth * mSelectionController.mSelectionStart;
+                mUnselectedHeadRect.setEmpty();
             }
 
-            if (mSelectionController.mSelectionEnd >= 0.99) {
-                mEndX = mViewWidth;
+            if (mSelectionController.mEndBarRect.right < viewWidth) {
+                mUnselectedTailRect.set(mRightFrameRect.right + 1, 0, viewWidth, viewHeight);
             } else {
-                mHasUnselectedTail = true;
-                mEndX = mViewWidth * mSelectionController.mSelectionEnd;
+                mUnselectedTailRect.setEmpty();
             }
-
-            mStartXFrame = mStartX + mFrameVerticalLineWidth;
-            mEndXFrame = mEndX - mFrameVerticalLineWidth;
 
             mHasDrawData = true;
             invalidate();
@@ -432,34 +498,20 @@ class ChartPeriodView extends View {
                 return;
             }
 
-            canvas.drawRect(mStartX, 0, mStartXFrame, mViewHeight, mFramePaint);
-            canvas.drawRect(mStartXFrame, 0, mEndXFrame, mFrameHorizontalLineHeight, mFramePaint);
-            canvas.drawRect(mStartXFrame, mViewHeight - mFrameHorizontalLineHeight, mEndXFrame, mViewHeight, mFramePaint);
-            canvas.drawRect(mEndXFrame, 0, mEndX, mViewHeight, mFramePaint);
+            // Draw frame
+            canvas.drawRect(mLeftFrameRect, mFramePaint);
+            canvas.drawRect(mTopFrameRect, mFramePaint);
+            canvas.drawRect(mRightFrameRect, mFramePaint);
+            canvas.drawRect(mBottomFrameRect, mFramePaint);
 
-            if (mHasUnselectedHead) {
-                canvas.drawRect(0, 0, mStartX - 1, mViewHeight, mUnselectedPaint);
+            // Draw yashmak
+            if (!mUnselectedHeadRect.isEmpty()) {
+                canvas.drawRect(mUnselectedHeadRect, mUnselectedPaint);
             }
 
-            if (mHasUnselectedTail) {
-                canvas.drawRect(mEndX + 1, 0, mViewWidth, mViewHeight, mUnselectedPaint);
+            if (!mUnselectedTailRect.isEmpty()) {
+                canvas.drawRect(mUnselectedTailRect, mUnselectedPaint);
             }
         }
     }
 }
-
-//  Draw test
-//        int min = -30;
-//        int max = 10;
-//
-//        int height = getHeight();
-//        int range = max - min;
-//
-//        float scale = ((float) height) / range;
-//
-//        int value = -15;
-//
-//        canvas.translate(0, max * scale);
-//        canvas.scale(1, -1);
-//
-//        canvas.drawLine(0, value * scale, 300, value * scale, paint);
