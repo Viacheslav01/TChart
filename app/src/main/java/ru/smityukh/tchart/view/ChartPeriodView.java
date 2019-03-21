@@ -25,7 +25,7 @@ class ChartPeriodView extends View {
     @Nullable
     private ChartsRender mChartsRender;
     @NonNull
-    private SelectionRender mSelectionRender = new SelectionRender();
+    private final PeriodSelectionFrameRender mPeriodSelectionFrameRender = new PeriodSelectionFrameRender(this);
 
     @NonNull
     private final SelectionController mSelectionController = new SelectionController();
@@ -95,7 +95,7 @@ class ChartPeriodView extends View {
 
         drawCharts(canvas);
 
-        mSelectionRender.draw(canvas);
+        mPeriodSelectionFrameRender.draw(canvas);
     }
 
     private void drawCharts(@NonNull Canvas canvas) {
@@ -391,7 +391,7 @@ class ChartPeriodView extends View {
             if (mViewWidth <= 0 || mViewHeight <= 0) {
                 mStartBarRect.setEmpty();
                 mEndBarRect.setEmpty();
-                mSelectionRender.prepareDrawData(0, 0);
+                mPeriodSelectionFrameRender.prepareDrawData(0, 0, mStartBarRect, mEndBarRect);
                 return;
             }
 
@@ -413,105 +413,8 @@ class ChartPeriodView extends View {
             mStartBarRect.set(startX, 0, startX + mFrameVerticalLineWidth, mViewHeight);
             mEndBarRect.set(endX - mFrameVerticalLineWidth, 0, endX, mViewHeight);
 
-            mSelectionRender.prepareDrawData(mViewWidth, mViewHeight);
-        }
-    }
-
-    private class SelectionRender {
-        private final int mFrameHorizontalLineHeight;
-
-        @NonNull
-        private final Paint mUnselectedPaint;
-        @NonNull
-        private final Paint mFramePaint;
-
-        @NonNull
-        private final Rect mUnselectedHeadRect = new Rect();
-        @NonNull
-        private final Rect mUnselectedTailRect = new Rect();
-
-        @NonNull
-        private final Rect mLeftFrameRect = new Rect();
-        @NonNull
-        private final Rect mTopFrameRect = new Rect();
-        @NonNull
-        private final Rect mRightFrameRect = new Rect();
-        @NonNull
-        private final Rect mBottomFrameRect = new Rect();
-
-        private boolean mHasDrawData;
-
-        SelectionRender() {
-            Resources resources = getContext().getResources();
-
-            mUnselectedPaint = new Paint();
-            mUnselectedPaint.setColor(resources.getColor(R.color.colorUnselectedPeriodYashmak));
-
-            mFramePaint = new Paint();
-            mFramePaint.setColor(resources.getColor(R.color.colorSelectedPeriodFrame));
-
-            mFrameHorizontalLineHeight = resources.getDimensionPixelSize(R.dimen.period_selector_view_frame_horizontal_line_height);
-        }
-
-        void prepareDrawData(int viewWidth, int viewHeight) {
-            if (viewWidth <= 0 || viewHeight <= 0) {
-                mHasDrawData = false;
-                invalidate();
-                return;
-            }
-
-            if (mSelectionController.mStartBarRect.isEmpty() || mSelectionController.mEndBarRect.isEmpty()) {
-                mHasDrawData = false;
-                invalidate();
-                return;
-            }
-
-            if (mChartData == null || mChartData.mAxis.length == 0) {
-                mHasDrawData = false;
-                invalidate();
-                return;
-            }
-
-            mLeftFrameRect.set(mSelectionController.mStartBarRect);
-            mRightFrameRect.set(mSelectionController.mEndBarRect);
-            mTopFrameRect.set(mLeftFrameRect.right, 0, mRightFrameRect.left, mFrameHorizontalLineHeight);
-            mBottomFrameRect.set(mLeftFrameRect.right, viewHeight - mFrameHorizontalLineHeight, mRightFrameRect.left, viewHeight);
-
-            if (mSelectionController.mStartBarRect.left > 0) {
-                mUnselectedHeadRect.set(0, 0, mLeftFrameRect.left - 1, viewHeight);
-            } else {
-                mUnselectedHeadRect.setEmpty();
-            }
-
-            if (mSelectionController.mEndBarRect.right < viewWidth) {
-                mUnselectedTailRect.set(mRightFrameRect.right + 1, 0, viewWidth, viewHeight);
-            } else {
-                mUnselectedTailRect.setEmpty();
-            }
-
-            mHasDrawData = true;
-            invalidate();
-        }
-
-        void draw(@NonNull Canvas canvas) {
-            if (!mHasDrawData) {
-                return;
-            }
-
-            // Draw frame
-            canvas.drawRect(mLeftFrameRect, mFramePaint);
-            canvas.drawRect(mTopFrameRect, mFramePaint);
-            canvas.drawRect(mRightFrameRect, mFramePaint);
-            canvas.drawRect(mBottomFrameRect, mFramePaint);
-
-            // Draw yashmak
-            if (!mUnselectedHeadRect.isEmpty()) {
-                canvas.drawRect(mUnselectedHeadRect, mUnselectedPaint);
-            }
-
-            if (!mUnselectedTailRect.isEmpty()) {
-                canvas.drawRect(mUnselectedTailRect, mUnselectedPaint);
-            }
+            // TODO: I have to decide is a safe copy of the rect required here or not.
+            mPeriodSelectionFrameRender.prepareDrawData(mViewWidth, mViewHeight, mStartBarRect, mEndBarRect);
         }
     }
 }
