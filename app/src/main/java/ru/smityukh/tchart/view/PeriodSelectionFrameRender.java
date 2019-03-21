@@ -48,8 +48,8 @@ class PeriodSelectionFrameRender {
         mFrameHorizontalLineHeight = resources.getDimensionPixelSize(R.dimen.period_selector_view_frame_horizontal_line_height);
     }
 
-    void prepareDrawData(int viewWidth, int viewHeight, @NonNull Rect startBarRect, @NonNull Rect endBarRect) {
-        if (viewWidth <= 0 || viewHeight <= 0) {
+    void prepareDrawData(int width, int height, @NonNull Rect startBarRect, @NonNull Rect endBarRect) {
+        if (width <= 0 || height <= 0) {
             mHasDrawData = false;
             invalidate();
             return;
@@ -64,16 +64,16 @@ class PeriodSelectionFrameRender {
         mLeftFrameRect.set(startBarRect);
         mRightFrameRect.set(endBarRect);
         mTopFrameRect.set(mLeftFrameRect.right, 0, mRightFrameRect.left, mFrameHorizontalLineHeight);
-        mBottomFrameRect.set(mLeftFrameRect.right, viewHeight - mFrameHorizontalLineHeight, mRightFrameRect.left, viewHeight);
+        mBottomFrameRect.set(mLeftFrameRect.right, height - mFrameHorizontalLineHeight, mRightFrameRect.left, height);
 
         if (startBarRect.left > 0) {
-            mUnselectedHeadRect.set(0, 0, mLeftFrameRect.left - 1, viewHeight);
+            mUnselectedHeadRect.set(0, 0, mLeftFrameRect.left - 1, height);
         } else {
             mUnselectedHeadRect.setEmpty();
         }
 
-        if (endBarRect.right < viewWidth) {
-            mUnselectedTailRect.set(mRightFrameRect.right + 1, 0, viewWidth, viewHeight);
+        if (endBarRect.right < width) {
+            mUnselectedTailRect.set(mRightFrameRect.right + 1, 0, width, height);
         } else {
             mUnselectedTailRect.setEmpty();
         }

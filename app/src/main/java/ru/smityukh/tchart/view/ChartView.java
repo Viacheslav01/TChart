@@ -2,6 +2,7 @@ package ru.smityukh.tchart.view;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.graphics.Rect;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.widget.CompoundButtonCompat;
@@ -9,7 +10,9 @@ import android.support.v7.widget.DividerItemDecoration;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
@@ -45,6 +48,30 @@ public class ChartView extends LinearLayout {
 
     public void setData(@NonNull ChartData data) {
         mController.setData(data);
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        // TODO: Optimize or search a nice solution
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            Rect rect = new Rect();
+            mController.mChartPeriodView.getHitRect(rect);
+
+            float x = event.getX();
+            float y = event.getY();
+
+            if (rect.left > x || rect.right < x) {
+                if (rect.top <= y && rect.bottom >= y) {
+                    if (rect.left > x) {
+                        event.setLocation(rect.left, y);
+                    } else {
+                        event.setLocation(rect.right - 1, y);
+                    }
+                }
+            }
+        }
+
+        return super.dispatchTouchEvent(event);
     }
 
     private class Controller {
