@@ -1,6 +1,7 @@
 package ru.smityukh.tchart.view;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.support.annotation.NonNull;
@@ -25,6 +26,8 @@ class ChartPeriodView extends View {
 
     @NonNull
     private final SelectionController mSelectionController = new SelectionController();
+    @Nullable
+    private ChartData mChartData;
 
     public ChartPeriodView(Context context) {
         super(context);
@@ -48,10 +51,14 @@ class ChartPeriodView extends View {
     }
 
     void setData(@NonNull ChartData data) {
+        mChartData = data;
+
         mChartsRender = new ChartsRender(data, this);
         mChartsRender.setLineWidth(mLineWidth);
         mChartsRender.setVerticalChartOffset(mSetVerticalChartOffset);
         mChartsRender.setViewSize(getWidth(), getHeight());
+
+        mSelectionRender.setViewSize(getWidth(), getHeight());
     }
 
     @Override
@@ -61,6 +68,8 @@ class ChartPeriodView extends View {
         if (mChartsRender != null) {
             mChartsRender.setViewSize(width, height);
         }
+
+        mSelectionRender.setViewSize(width, height);
     }
 
     @Override
@@ -173,6 +182,26 @@ class ChartPeriodView extends View {
             for (int chart = 0; chart < mChartsCount; chart++) {
                 mChartPaints[chart].setStrokeWidth(lineWidth);
             }
+        }
+
+        void setChartVisibility(int position, boolean visible) {
+            if (position < 0 || position >= mChartsCount) {
+                throw new IllegalArgumentException("Position is out of range");
+            }
+
+            if (mChartVisible[position] == visible) {
+                return;
+            }
+
+            mChartVisible[position] = visible;
+
+            // TODO: I have to implement incremental update here is not necessary to recalculate the whole data
+            prepareDrawData();
+        }
+
+        void setVerticalChartOffset(int setVerticalChartOffset) {
+            mSetVerticalChartOffset = setVerticalChartOffset;
+            prepareDrawData();
         }
 
         void setViewSize(int width, int height) {
@@ -307,76 +336,113 @@ class ChartPeriodView extends View {
 
             return paint;
         }
-
-        void setChartVisibility(int position, boolean visible) {
-            if (position < 0 || position >= mChartsCount) {
-                throw new IllegalArgumentException("Position is out of range");
-            }
-
-            if (mChartVisible[position] == visible) {
-                return;
-            }
-
-            mChartVisible[position] = visible;
-
-            // TODO: I have to implement incremental update here is not necessary to recalculate the whole data
-            prepareDrawData();
-        }
-
-        public void setVerticalChartOffset(int setVerticalChartOffset) {
-            mSetVerticalChartOffset = setVerticalChartOffset;
-            prepareDrawData();
-        }
     }
 
     private class SelectionController {
-        float mSelectionStart = 0.3f;
-        float mSelectionEnd = 0.6f;
+        float mSelectionStart = 0.0f;
+        float mSelectionEnd = 1.0f;
     }
 
     private class SelectionRender {
+        @NonNull
+        private final Paint mUnselectedPaint;
+        @NonNull
+        private final Paint mFramePaint;
 
-        public void draw(@NonNull Canvas canvas) {
-            int width = getWidth();
-            int height = getHeight();
+        private final int mFrameHorizontalLineHeight;
+        private final int mFrameVerticalLineWidth;
 
-            boolean hasUnselectedHead = false;
-            boolean hasUnselectedTail = false;
+        private boolean mHasDrawData;
 
-            float startX;
-            float endX;
+        private int mViewWidth;
+        private int mViewHeight;
+
+        private boolean mHasUnselectedHead;
+        private boolean mHasUnselectedTail;
+
+        private float mStartX;
+        private float mStartXFrame;
+
+        private float mEndX;
+        private float mEndXFrame;
+
+        SelectionRender() {
+            Resources resources = getContext().getResources();
+
+            mUnselectedPaint = new Paint();
+            mUnselectedPaint.setColor(resources.getColor(R.color.colorUnselectedPeriodYashmak));
+
+            mFramePaint = new Paint();
+            mFramePaint.setColor(resources.getColor(R.color.colorSelectedPeriodFrame));
+
+            mFrameHorizontalLineHeight = resources.getDimensionPixelSize(R.dimen.period_selector_view_frame_horizontal_line_height);
+            mFrameVerticalLineWidth = resources.getDimensionPixelSize(R.dimen.period_selector_view_frame_vertical_line_width);
+        }
+
+        void setViewSize(int width, int height) {
+            if (mViewWidth == width && mViewHeight == height) {
+                return;
+            }
+
+            mViewWidth = width;
+            mViewHeight = height;
+
+            prepareDrawData();
+        }
+
+        private void prepareDrawData() {
+            if (mViewWidth <= 0 || mViewHeight <= 0) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            if (mChartData == null || mChartData.mAxis.length == 0) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            mHasUnselectedHead = false;
+            mHasUnselectedTail = false;
 
             if (mSelectionController.mSelectionStart <= 0.01) {
-                startX = 0;
+                mStartX = 0;
             } else {
-                hasUnselectedHead = true;
-                startX = width * mSelectionController.mSelectionStart;
+                mHasUnselectedHead = true;
+                mStartX = mViewWidth * mSelectionController.mSelectionStart;
             }
 
             if (mSelectionController.mSelectionEnd >= 0.99) {
-                endX = width;
+                mEndX = mViewWidth;
             } else {
-                hasUnselectedTail = true;
-                endX = width * mSelectionController.mSelectionEnd;
+                mHasUnselectedTail = true;
+                mEndX = mViewWidth * mSelectionController.mSelectionEnd;
             }
 
-            Paint unselectedPaint = new Paint();
-            unselectedPaint.setColor(0xB2F0F3F4);
+            mStartXFrame = mStartX + mFrameVerticalLineWidth;
+            mEndXFrame = mEndX - mFrameVerticalLineWidth;
 
-            Paint framePaint = new Paint();
-            framePaint.setColor(0x26325A96);
+            mHasDrawData = true;
+            invalidate();
+        }
 
-            canvas.drawRect(startX, 0, startX + 15, height, framePaint);
-            canvas.drawRect(startX + 15, 0, endX - 15, 3, framePaint);
-            canvas.drawRect(startX + 15, height - 3, endX - 15, height, framePaint);
-            canvas.drawRect(endX - 15, 0, endX, height, framePaint);
-
-            if (hasUnselectedHead) {
-                canvas.drawRect(0, 0, startX -1, height, unselectedPaint);
+        void draw(@NonNull Canvas canvas) {
+            if (!mHasDrawData) {
+                return;
             }
 
-            if (hasUnselectedTail) {
-                canvas.drawRect(endX + 1, 0, width, height, unselectedPaint);
+            canvas.drawRect(mStartX, 0, mStartXFrame, mViewHeight, mFramePaint);
+            canvas.drawRect(mStartXFrame, 0, mEndXFrame, mFrameHorizontalLineHeight, mFramePaint);
+            canvas.drawRect(mStartXFrame, mViewHeight - mFrameHorizontalLineHeight, mEndXFrame, mViewHeight, mFramePaint);
+            canvas.drawRect(mEndXFrame, 0, mEndX, mViewHeight, mFramePaint);
+
+            if (mHasUnselectedHead) {
+                canvas.drawRect(0, 0, mStartX - 1, mViewHeight, mUnselectedPaint);
+            }
+
+            if (mHasUnselectedTail) {
+                canvas.drawRect(mEndX + 1, 0, mViewWidth, mViewHeight, mUnselectedPaint);
             }
         }
     }

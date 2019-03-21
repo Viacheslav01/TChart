@@ -3,4 +3,6 @@
 <resources>
     <dimen name="period_selector_view_line_width">1dp</dimen>
     <dimen name="period_selector_view_vertical_chart_offset">3dp</dimen>
+    <dimen name="period_selector_view_frame_horizontal_line_height">1dp</dimen>
+    <dimen name="period_selector_view_frame_vertical_line_width">6dp</dimen>
 </resources>
