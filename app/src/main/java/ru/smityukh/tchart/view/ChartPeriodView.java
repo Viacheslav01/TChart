@@ -346,6 +346,7 @@ class ChartPeriodView extends View {
 
     private class SelectionController {
 
+        private static final double MIN_SELECTION_CHANGE_STEP = 0.001;
         float mSelectionStart = .45f;
         float mSelectionEnd = .9f;
 
@@ -364,6 +365,8 @@ class ChartPeriodView extends View {
         private final Rect mStartBarHitTestRect = new Rect();
         @NonNull
         private final Rect mEndBarHitTestRect = new Rect();
+        @NonNull
+        private final Rect mSelectedHitTestRect = new Rect();
 
         SelectionController(@NonNull Context context) {
             ViewConfiguration viewConfiguration = ViewConfiguration.get(context);
@@ -388,8 +391,9 @@ class ChartPeriodView extends View {
                 mStartBarRect.setEmpty();
                 mEndBarRect.setEmpty();
 
-                fillHitTest(mStartBarRect, mStartBarHitTestRect);
-                fillHitTest(mEndBarRect, mEndBarHitTestRect);
+                fillBarHitTest(mStartBarRect, mStartBarHitTestRect);
+                fillBarHitTest(mEndBarRect, mEndBarHitTestRect);
+                mSelectedHitTestRect.setEmpty();
 
                 mPeriodSelectionFrameRender.prepareDrawData(0, 0, mStartBarRect, mEndBarRect);
                 return;
@@ -413,14 +417,15 @@ class ChartPeriodView extends View {
             mStartBarRect.set(startX, 0, startX + mFrameVerticalLineWidth, mViewHeight);
             mEndBarRect.set(endX - mFrameVerticalLineWidth, 0, endX, mViewHeight);
 
-            fillHitTest(mStartBarRect, mStartBarHitTestRect);
-            fillHitTest(mEndBarRect, mEndBarHitTestRect);
+            fillBarHitTest(mStartBarRect, mStartBarHitTestRect);
+            fillBarHitTest(mEndBarRect, mEndBarHitTestRect);
+            mSelectedHitTestRect.set(mStartBarHitTestRect.right, mStartBarHitTestRect.top, mEndBarHitTestRect.left, mEndBarHitTestRect.bottom);
 
             // TODO: I have to decide is a safe copy of the rect required here or not.
             mPeriodSelectionFrameRender.prepareDrawData(mViewWidth, mViewHeight, mStartBarRect, mEndBarRect);
         }
 
-        private void fillHitTest(@NonNull Rect sourceRect, @NonNull Rect hitTestRect) {
+        private void fillBarHitTest(@NonNull Rect sourceRect, @NonNull Rect hitTestRect) {
             if (sourceRect.isEmpty()) {
                 hitTestRect.setEmpty();
                 return;
@@ -436,6 +441,7 @@ class ChartPeriodView extends View {
         private TouchState mTouchState = new NoTouchState();
 
         boolean onTouchEvent(@NonNull MotionEvent event) {
+            Log.w("FUCK", event.toString());
             return mTouchState.onTouchEvent(event);
         }
 
@@ -463,6 +469,13 @@ class ChartPeriodView extends View {
                 if (mEndBarHitTestRect.contains((int) x, (int) y)) {
                     mTouchState = new EndSeparatorDownState(event);
                     return true;
+                }
+
+                if (mSelectedHitTestRect.contains((int) x, (int) y)) {
+                    if (mSelectionStart >= 0.01 || mSelectionEnd <= 0.99) {
+                        mTouchState = new SelectedRegionDownState(event);
+                        return true;
+                    }
                 }
 
                 return false;
@@ -496,8 +509,6 @@ class ChartPeriodView extends View {
             @Override
             boolean onTouchEvent(@NonNull MotionEvent event) {
                 int action = event.getActionMasked();
-
-                Log.w("FUCK", "move: " + event);
 
                 switch (action) {
                     case MotionEvent.ACTION_UP:
@@ -581,7 +592,7 @@ class ChartPeriodView extends View {
                 float newX = Math.min(mOriginalRect.left + totalX, mMaxX);
 
                 float newStart = newX / mViewWidth;
-                if (Math.abs(mSelectionStart - newStart) < 0.01) {
+                if (Math.abs(mSelectionStart - newStart) < MIN_SELECTION_CHANGE_STEP) {
                     return;
                 }
 
@@ -611,11 +622,59 @@ class ChartPeriodView extends View {
                 float newX = Math.max(mOriginalRect.right + totalX, mMinX);
 
                 float newEnd = newX / mViewWidth;
-                if (Math.abs(mSelectionEnd - newEnd) < 0.01) {
+                if (Math.abs(mSelectionEnd - newEnd) < MIN_SELECTION_CHANGE_STEP) {
                     return;
                 }
 
                 mSelectionEnd = newEnd;
+                updatePixelData();
+            }
+        }
+
+        private class SelectedRegionDownState extends XScrollState {
+
+            private final Rect mOriginalStartRect;
+            private final Rect mOriginalEndRect;
+            private final float mSelectionLenght;
+
+            SelectedRegionDownState(@NonNull MotionEvent downEvent) {
+                super(downEvent);
+
+                mOriginalStartRect = new Rect(mStartBarRect);
+                mOriginalEndRect = new Rect(mEndBarRect);
+
+                mSelectionLenght = mSelectionEnd - mSelectionStart;
+            }
+
+            @Override
+            void onScroll(float x, float deltaX, float totalX) {
+                if (mViewWidth <= 0) {
+                    return;
+                }
+
+                float startX = mOriginalStartRect.left + totalX;
+                float endX = mOriginalEndRect.right + totalX;
+
+                float start;
+                float end;
+
+                if (startX <= 0) {
+                    start = 0.0f;
+                    end = mSelectionLenght;
+                } else if (endX >= mViewWidth) {
+                    end = 1.0f;
+                    start = 1.0f - mSelectionLenght;
+                } else {
+                    start = startX / mViewWidth;
+                    end = start + mSelectionLenght;
+                }
+
+                if (Math.abs(mSelectionStart - start) < MIN_SELECTION_CHANGE_STEP) {
+                    return;
+                }
+
+                mSelectionStart = start;
+                mSelectionEnd = end;
                 updatePixelData();
             }
         }
