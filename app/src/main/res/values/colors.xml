@@ -6,4 +6,6 @@
 
     <color name="colorUnselectedPeriodYashmak">#B2F0F3F4</color>
     <color name="colorSelectedPeriodFrame">#26325A96</color>
+
+    <color name="colorAxisTextColor">#96A2AA</color>
 </resources>

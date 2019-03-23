@@ -6,6 +6,7 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.math.MathUtils;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -33,6 +34,8 @@ class ChartPeriodView extends View {
     private final SelectionController mSelectionController;
     @Nullable
     private ChartData mChartData;
+    @Nullable
+    private OnSelectionChangedCallback mSelectionChangedCallback;
 
     public ChartPeriodView(Context context) {
         this(context, null, 0);
@@ -56,6 +59,16 @@ class ChartPeriodView extends View {
         return mSelectionController.onTouchEvent(event);
     }
 
+    public void setOnSelectionChangedCallback(@Nullable OnSelectionChangedCallback callback) {
+        mSelectionChangedCallback = callback;
+    }
+
+    private void notifySelectionChanged() {
+        if (mSelectionChangedCallback != null) {
+            mSelectionChangedCallback.onSelectionChanged(mSelectionController.getStart(), mSelectionController.getEnd());
+        }
+    }
+
     void setData(@NonNull ChartData data) {
         mChartData = data;
 
@@ -64,6 +77,7 @@ class ChartPeriodView extends View {
         mChartsRender.setVerticalChartOffset(mSetVerticalChartOffset);
         mChartsRender.setViewSize(getWidth(), getHeight());
 
+        mSelectionController.setSelection(0f, 1f);
         mSelectionController.setViewSize(getWidth(), getHeight());
     }
 
@@ -107,8 +121,8 @@ class ChartPeriodView extends View {
 
         private static final double MIN_SELECTION_CHANGE_STEP = 0.001;
 
-        float mSelectionStart = .45f;
-        float mSelectionEnd = .9f;
+        float mSelectionStartV = 0;
+        float mSelectionEndV = 1f;
 
         private int mViewWidth;
         private int mViewHeight;
@@ -146,6 +160,59 @@ class ChartPeriodView extends View {
             updatePixelData();
         }
 
+        private void setSelection(float start, float end) {
+            start = MathUtils.clamp(start, 0.0f, 1.0f);
+            end = MathUtils.clamp(end, 0.0f, 1.0f);
+
+            if (end < start) {
+                end = start;
+            }
+
+            if (Float.compare(mSelectionStartV, start) == 0 && Float.compare(mSelectionEndV, end) == 0) {
+                return;
+            }
+
+            mSelectionStartV = start;
+            mSelectionEndV = end;
+
+            notifySelectionChanged();
+            updatePixelData();
+        }
+
+        private void setSelectionStart(float start) {
+            start = MathUtils.clamp(start, 0.0f, 1.0f);
+
+            if (mSelectionEndV < start) {
+                start = mSelectionEndV;
+            }
+
+            if (Float.compare(mSelectionStartV, start) == 0) {
+                return;
+            }
+
+            mSelectionStartV = start;
+
+            notifySelectionChanged();
+            updatePixelData();
+        }
+
+        private void setSelectionEnd(float end) {
+            end = MathUtils.clamp(end, 0.0f, 1.0f);
+
+            if (end < mSelectionStartV) {
+                end = mSelectionStartV;
+            }
+
+            if (Float.compare(mSelectionEndV, end) == 0) {
+                return;
+            }
+
+            mSelectionEndV = end;
+
+            notifySelectionChanged();
+            updatePixelData();
+        }
+
         private void updatePixelData() {
             if (mViewWidth <= 0 || mViewHeight <= 0) {
                 mStartBarRect.setEmpty();
@@ -162,16 +229,16 @@ class ChartPeriodView extends View {
             int startX;
             int endX;
 
-            if (mSelectionController.mSelectionStart <= 0.01) {
+            if (mSelectionController.getStart() <= 0.01) {
                 startX = 0;
             } else {
-                startX = (int) (mViewWidth * mSelectionController.mSelectionStart);
+                startX = (int) (mViewWidth * mSelectionController.getStart());
             }
 
-            if (mSelectionController.mSelectionEnd >= 0.99) {
+            if (mSelectionController.getEnd() >= 0.99) {
                 endX = mViewWidth;
             } else {
-                endX = (int) (mViewWidth * mSelectionController.mSelectionEnd);
+                endX = (int) (mViewWidth * mSelectionController.getEnd());
             }
 
             mStartBarRect.set(startX, 0, startX + mFrameVerticalLineWidth, mViewHeight);
@@ -201,8 +268,15 @@ class ChartPeriodView extends View {
         private TouchState mTouchState = new NoTouchState();
 
         boolean onTouchEvent(@NonNull MotionEvent event) {
-            Log.w("FUCK", event.toString());
             return mTouchState.onTouchEvent(event);
+        }
+
+        float getStart() {
+            return mSelectionStartV;
+        }
+
+        float getEnd() {
+            return mSelectionEndV;
         }
 
         private abstract class TouchState {
@@ -215,8 +289,6 @@ class ChartPeriodView extends View {
                 if (event.getActionMasked() != MotionEvent.ACTION_DOWN) {
                     return false;
                 }
-
-                Log.e("FUCK", "" + event.getSize());
 
                 float x = event.getX();
                 float y = event.getY();
@@ -232,7 +304,7 @@ class ChartPeriodView extends View {
                 }
 
                 if (mSelectedHitTestRect.contains((int) x, (int) y)) {
-                    if (mSelectionStart >= 0.01 || mSelectionEnd <= 0.99) {
+                    if (mSelectionStartV >= 0.01 || mSelectionEndV <= 0.99) {
                         mTouchState = new SelectedRegionDownState(event);
                         return true;
                     }
@@ -352,12 +424,11 @@ class ChartPeriodView extends View {
                 float newX = Math.min(mOriginalRect.left + totalX, mMaxX);
 
                 float newStart = newX / mViewWidth;
-                if (Math.abs(mSelectionStart - newStart) < MIN_SELECTION_CHANGE_STEP) {
+                if (Math.abs(mSelectionStartV - newStart) < MIN_SELECTION_CHANGE_STEP) {
                     return;
                 }
 
-                mSelectionStart = newStart;
-                updatePixelData();
+                setSelectionStart(newStart);
             }
         }
 
@@ -382,12 +453,11 @@ class ChartPeriodView extends View {
                 float newX = Math.max(mOriginalRect.right + totalX, mMinX);
 
                 float newEnd = newX / mViewWidth;
-                if (Math.abs(mSelectionEnd - newEnd) < MIN_SELECTION_CHANGE_STEP) {
+                if (Math.abs(mSelectionEndV - newEnd) < MIN_SELECTION_CHANGE_STEP) {
                     return;
                 }
 
-                mSelectionEnd = newEnd;
-                updatePixelData();
+                setSelectionEnd(newEnd);
             }
         }
 
@@ -403,7 +473,7 @@ class ChartPeriodView extends View {
                 mOriginalStartRect = new Rect(mStartBarRect);
                 mOriginalEndRect = new Rect(mEndBarRect);
 
-                mSelectionLenght = mSelectionEnd - mSelectionStart;
+                mSelectionLenght = mSelectionEndV - mSelectionStartV;
             }
 
             @Override
@@ -429,14 +499,16 @@ class ChartPeriodView extends View {
                     end = start + mSelectionLenght;
                 }
 
-                if (Math.abs(mSelectionStart - start) < MIN_SELECTION_CHANGE_STEP) {
+                if (Math.abs(mSelectionStartV - start) < MIN_SELECTION_CHANGE_STEP) {
                     return;
                 }
 
-                mSelectionStart = start;
-                mSelectionEnd = end;
-                updatePixelData();
+                setSelection(start, end);
             }
         }
+    }
+
+    public interface OnSelectionChangedCallback {
+        void onSelectionChanged(float start, float end);
     }
 }

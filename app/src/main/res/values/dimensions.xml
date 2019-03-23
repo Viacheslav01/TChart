@@ -5,4 +5,7 @@
     <dimen name="period_selector_view_vertical_chart_offset">3dp</dimen>
     <dimen name="period_selector_view_frame_horizontal_line_height">1dp</dimen>
     <dimen name="period_selector_view_frame_vertical_line_width">6dp</dimen>
+
+    <dimen name="chart_main_view_axis_text_size">14sp</dimen>
+    <dimen name="chart_main_view_axis_text_vertical_padding">12dp</dimen>
 </resources>

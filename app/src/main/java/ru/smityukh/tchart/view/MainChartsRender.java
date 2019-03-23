@@ -9,14 +9,15 @@ import android.view.animation.AccelerateDecelerateInterpolator;
 import ru.smityukh.tchart.animation.FloatAnimationWrapper;
 import ru.smityukh.tchart.data.ChartData;
 
-class PeriodChartsRender {
+// Copy paste of PeriodsChartsRenderer. I don't sure that I need an universal one.
+class MainChartsRender {
 
     private static final long ANIMATION_DURATION_MS = 250;
 
     @NonNull
     private final ChartData mChartData;
     @NonNull
-    private ChartPeriodView mView;
+    private ChartMainView mView;
 
     private int mChartsCount;
     private int mColumnsCount;
@@ -46,7 +47,7 @@ class PeriodChartsRender {
 
     private final AnimationManager mAnimationManager;
 
-    PeriodChartsRender(@NonNull ChartData data, @NonNull ChartPeriodView view) {
+    MainChartsRender(@NonNull ChartData data, @NonNull ChartMainView view) {
         mChartData = data;
         mView = view;
 

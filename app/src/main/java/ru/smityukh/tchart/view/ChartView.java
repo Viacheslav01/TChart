@@ -89,10 +89,16 @@ public class ChartView extends LinearLayout {
 
             mChartSelector.setOnCheckedChangedCallback((position, checked) -> {
                 mChartPeriodView.setChartVisibility(position, checked);
+                mChartMainView.setChartVisibility(position, checked);
+            });
+
+            mChartPeriodView.setOnSelectionChangedCallback((start, end) -> {
+                mChartMainView.setSelection(start, end);
             });
         }
 
         void setData(@NonNull ChartData data) {
+            mChartMainView.setChartData(data);
             mChartPeriodView.setData(data);
             mChartSelector.setData(data);
         }
