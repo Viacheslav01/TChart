@@ -11,6 +11,8 @@ import ru.smityukh.tchart.data.ChartData;
 
 class PeriodChartsRender {
 
+    private static final long ANIMATION_DURATION_MS = 2500;
+
     @NonNull
     private final ChartData mChartData;
     @NonNull
@@ -42,11 +44,15 @@ class PeriodChartsRender {
     private float mLastMinValue;
     private float mLastMaxValue;
 
+    private final AnimationManager mAnimationManager;
+
     PeriodChartsRender(@NonNull ChartData data, @NonNull ChartPeriodView view) {
         mChartData = data;
         mView = view;
 
         mChartsCount = data.mValues.length;
+        mAnimationManager = new AnimationManager(mChartsCount);
+
         if (mChartsCount == 0) {
             return;
         }
@@ -99,22 +105,17 @@ class PeriodChartsRender {
         }
     }
 
-    @Nullable
-    private VisibilityChangeAnimation mVisibilityAnimation;
-
     void setChartVisibility(int position, boolean visible) {
         if (position < 0 || position >= mChartsCount) {
             throw new IllegalArgumentException("Position is out of range");
         }
 
-        if (mVisibilityAnimation != null) {
-            mVisibilityAnimation = mVisibilityAnimation.createSuccessor(position, visible);
-            mVisibilityAnimation.start();
+        if (mChartVisible[position] == visible) {
             return;
         }
 
-        mVisibilityAnimation = new VisibilityChangeAnimation(position, visible);
-        mVisibilityAnimation.start();
+        mChartVisible[position] = visible;
+        mAnimationManager.animateVisibilityChnaged(position, visible);
     }
 
     void setVerticalChartOffset(int setVerticalChartOffset) {
@@ -147,7 +148,7 @@ class PeriodChartsRender {
             return;
         }
 
-        if (mColumnsCount <= 0) {
+        if (mColumnsCount <= 1) {
             mHasDrawData = false;
             mView.invalidate();
             return;
@@ -163,6 +164,12 @@ class PeriodChartsRender {
         mLastMaxValue = maxValue;
 
         float range = maxValue - minValue;
+        if (Float.compare(range, 0.0f) == 0) {
+            mHasDrawData = false;
+            mView.invalidate();
+            return;
+        }
+
         float yScale = ((float) mViewHeight - mSetVerticalChartOffset * 2) / range;
         float xStepSize = ((float) mViewWidth) / mLinesCount;
 
@@ -210,7 +217,7 @@ class PeriodChartsRender {
 
         int lineOffset = 0;
         for (int index = 0; index < mChartsCount; index++) {
-            if (mChartVisible[index]) {
+            if (mChartVisible[index] || mAnimationManager.isVisibleForRender(index)) {
                 canvas.drawLines(mLines, lineOffset << 2, mLinesCount << 2, mChartPaints[index]);
             }
 
@@ -271,261 +278,161 @@ class PeriodChartsRender {
         return paint;
     }
 
-    private class VisibilityChangeAnimation extends FloatAnimationWrapper {
+    private class AnimationManager {
+        @NonNull
+        private final AlphaAnimation[] mAlphaAnimations;
+        @Nullable
+        private RangeAnimation mRangeAnimation;
 
-        private static final long DURATION_MS = 2500;
+        AnimationManager(int chartsCount) {
+            mAlphaAnimations = new AlphaAnimation[chartsCount];
+        }
 
-        private final int mPosition;
-        private final boolean mVisible;
+        boolean isVisibleForRender(int position) {
+            return mAlphaAnimations[position] != null;
+        }
 
-        private final AnimationBlock[] mBlocks;
+        void animateVisibilityChnaged(int position, boolean visible) {
+            AlphaAnimation alphaAnimation = createAlphaAnimation(position, visible);
+            RangeAnimation rangeAnimation = createRangeAnimation();
 
-        private float mLastAnimatedvalue;
+            alphaAnimation.start();
+            if (rangeAnimation != null) {
+                rangeAnimation.start();
+            }
+        }
 
-        VisibilityChangeAnimation(int position, boolean visible) {
-            super(0.0f, 1.0f);
-
-            setDuration(DURATION_MS);
-            setInterpolator(new AccelerateDecelerateInterpolator());
-
-            mPosition = position;
-            mVisible = visible;
-
-            AnimationBlock visibilityBlock = new VisibilityAnimationBlock(position, visible);
-            AnimationBlock rangeBlock = createRangeBlock(position, visible);
-
-            if (rangeBlock != null) {
-                mBlocks = new AnimationBlock[]{visibilityBlock, rangeBlock};
+        @NonNull
+        private AlphaAnimation createAlphaAnimation(int position, boolean visible) {
+            AlphaAnimation alphaAnimation = mAlphaAnimations[position];
+            if (alphaAnimation == null || (!alphaAnimation.isStarted() && !alphaAnimation.isRunning())) {
+                alphaAnimation = new AlphaAnimation(position, visible);
             } else {
-                mBlocks = new AnimationBlock[]{visibilityBlock};
-            }
-        }
-
-        private VisibilityChangeAnimation(long duration, int position, boolean visible, @NonNull AnimationBlock[] blocks) {
-            super(0.0f, 1.0f);
-
-            setDuration(duration);
-            setInterpolator(new AccelerateDecelerateInterpolator());
-
-            mPosition = position;
-            mVisible = visible;
-
-            mBlocks = blocks;
-        }
-
-        public VisibilityChangeAnimation createSuccessor(int position, boolean visible) {
-            if (!isStarted() && !isRunning()) {
-                // Create the new animation if the current is not playing
-                return new VisibilityChangeAnimation(position, visible);
-            }
-
-            if (mPosition == position) {
-                if (mVisible == visible) {
-                    return this;
-                }
-
-                cancel();
+                alphaAnimation.cancel();
 
                 float currentValue = ((float) mChartPaints[position].getAlpha()) / 255;
-
-                AnimationBlock visibilityBlock = new ContinueVisibilityAnimationBlock(position, visible, currentValue);
-                AnimationBlock rangeBlock = createRangeBlock(position, visible);
-
-                AnimationBlock[] blocks;
-                if (rangeBlock != null) {
-                    blocks = new AnimationBlock[]{visibilityBlock, rangeBlock};
-                } else {
-                    blocks = new AnimationBlock[]{visibilityBlock};
-                }
-
-                long duration = (long) (visible ? DURATION_MS * (1 - currentValue) : DURATION_MS * currentValue);
-                return new VisibilityChangeAnimation(duration, position, visible, blocks);
+                alphaAnimation = new AlphaAnimation(position, visible, currentValue);
             }
 
-            cancel();
-            return new VisibilityChangeAnimation(position, visible);
+            mAlphaAnimations[position] = alphaAnimation;
+            return alphaAnimation;
         }
 
-        private AnimationBlock createRangeBlock(int position, boolean visible) {
-            boolean currentVisible = mChartVisible[position];
-            mChartVisible[position] = visible;
-
+        @Nullable
+        private RangeAnimation createRangeAnimation() {
             float minValue = getMinValue();
             float maxValue = getMaxValue();
 
-            mChartVisible[position] = currentVisible;
+            if (mRangeAnimation != null) {
+                mRangeAnimation.cancel();
+            }
 
             if (Float.compare(minValue, 0.0f) == 0 && Float.compare(maxValue, 0.0f) == 0) {
-                // Min and max value have to be changed to zero so we can do nothing
+                // Min and max value have to be changed to zero so we can change it without a smooth animation
+                mLastMinValue = 0;
+                mLastMaxValue = 0;
                 return null;
             }
 
             if (Float.compare(mLastMinValue, 0.0f) == 0 && Float.compare(mLastMaxValue, 0.0f) == 0) {
                 // Last min and max values was zero so we can change it without a smooth animation
-                return new JumpRangeAnimationBlock(minValue, maxValue);
+                prepareDrawData(minValue, maxValue);
+                return null;
             }
 
-            return new RangeAnimationBlock(mLastMinValue, minValue, mLastMaxValue, maxValue);
+            mRangeAnimation = new RangeAnimation(mLastMinValue, minValue, mLastMaxValue, maxValue);
+            return mRangeAnimation;
         }
 
-        @Override
-        protected void onAnimationStart() {
-            mLastAnimatedvalue = 0.0f;
+        private class AlphaAnimation extends FloatAnimationWrapper {
+            private final int mPosition;
+            private final boolean mVisible;
+            private final float mInitValue;
 
-            for (AnimationBlock block : mBlocks) {
-                block.onAnimationStart();
+            AlphaAnimation(int position, boolean visible) {
+                this(position, visible, visible ? 0.0f : 1.0f);
             }
-        }
 
-        @Override
-        protected void onAnimationFinished(boolean canceled) {
-            for (AnimationBlock block : mBlocks) {
-                block.onAnimationFinished(canceled);
+            AlphaAnimation(int position, boolean visible, @FloatRange(from = 0.0f, to = 1.0f) float initValue) {
+                super(0.0f, 1.0f);
+
+                mPosition = position;
+                mVisible = visible;
+                mInitValue = initValue;
+
+                long duration = (long) (visible ? ANIMATION_DURATION_MS * (1 - initValue) : ANIMATION_DURATION_MS * initValue);
+                setDuration(duration);
+                setInterpolator(new AccelerateDecelerateInterpolator());
             }
-        }
 
-        @Override
-        protected void onAnimationUpdate(float animatedValue) {
-            mLastAnimatedvalue = animatedValue;
-
-            for (AnimationBlock block : mBlocks) {
-                block.onAnimationUpdate(animatedValue);
+            @Override
+            protected void onAnimationStart() {
+                mChartPaints[mPosition].setAlpha((int) (255 * mInitValue));
             }
-        }
-    }
 
-    private class AnimationBlock {
-        void onAnimationStart() {
-        }
+            @Override
+            protected void onAnimationFinished(boolean canceled) {
+                mAnimationManager.mAlphaAnimations[mPosition] = null;
 
-        void onAnimationFinished(boolean canceled) {
-        }
+                if (!canceled) {
+                    mChartVisible[mPosition] = mVisible;
+                    mChartPaints[mPosition].setAlpha(255);
 
-        void onAnimationUpdate(float value) {
+                    invalidate();
+                }
+            }
 
-        }
-    }
+            @Override
+            protected void onAnimationUpdate(float value) {
+                float piece = mVisible ? 1.0f - mInitValue : mInitValue;
 
-    private class VisibilityAnimationBlock extends AnimationBlock {
-        private final int mPosition;
-        private final boolean mVisible;
+                int alpha = 255;
+                if (mVisible) {
+                    alpha *= mInitValue + piece * value;
+                } else {
+                    alpha *= mInitValue - piece * value;
+                }
 
-        VisibilityAnimationBlock(int position, boolean visible) {
-            mPosition = position;
-            mVisible = visible;
-        }
+                mChartPaints[mPosition].setAlpha(alpha);
 
-        @Override
-        void onAnimationStart() {
-            mChartVisible[mPosition] = true;
-            mChartPaints[mPosition].setAlpha(mVisible ? 0 : 255);
-        }
-
-        @Override
-        void onAnimationFinished(boolean canceled) {
-            if (!canceled) {
-                mChartVisible[mPosition] = mVisible;
-                mChartPaints[mPosition].setAlpha(255);
-
-                prepareDrawData();
+                invalidate();
             }
         }
 
-        @Override
-        void onAnimationUpdate(float value) {
-            int alpha = 255;
-            if (mVisible) {
-                alpha *= value;
-            } else {
-                alpha *= 1 - value;
+        private class RangeAnimation extends FloatAnimationWrapper {
+            private final float mFromMinValue;
+            private final float mToMinValue;
+            private final float mFromMaxValue;
+            private final float mToMaxValue;
+
+            RangeAnimation(float fromMinValue, float toMinValue, float fromMaxValue, float toMaxValue) {
+                super(0.0f, 1.0f);
+
+                mFromMinValue = fromMinValue;
+                mToMinValue = toMinValue;
+                mFromMaxValue = fromMaxValue;
+                mToMaxValue = toMaxValue;
+
+                setDuration(ANIMATION_DURATION_MS);
+                setInterpolator(new AccelerateDecelerateInterpolator());
             }
 
-            mChartPaints[mPosition].setAlpha(alpha);
+            @Override
+            protected void onAnimationFinished(boolean canceled) {
+                mAnimationManager.mRangeAnimation = null;
 
-            invalidate();
-        }
-    }
-
-    private class ContinueVisibilityAnimationBlock extends AnimationBlock {
-        private final int mPosition;
-        private final boolean mVisible;
-        private final float mInitValue;
-
-        ContinueVisibilityAnimationBlock(int position, boolean visible, @FloatRange(from = 0.0f, to = 1.0f) float initValue) {
-            mPosition = position;
-            mVisible = visible;
-            mInitValue = initValue;
-        }
-
-        @Override
-        void onAnimationStart() {
-            mChartVisible[mPosition] = true;
-            mChartPaints[mPosition].setAlpha((int) (255 * mInitValue));
-        }
-
-        @Override
-        void onAnimationFinished(boolean canceled) {
-            if (!canceled) {
-                mChartVisible[mPosition] = mVisible;
-                mChartPaints[mPosition].setAlpha(255);
-
-                prepareDrawData();
-            }
-        }
-
-        @Override
-        void onAnimationUpdate(float value) {
-            float piece = mVisible ? 1.0f - mInitValue : mInitValue;
-
-            int alpha = 255;
-            if (mVisible) {
-                alpha *= mInitValue + piece * value;
-            } else {
-                alpha *= mInitValue - piece * value;
+                if (!canceled) {
+                    prepareDrawData();
+                }
             }
 
-            mChartPaints[mPosition].setAlpha(alpha);
+            @Override
+            protected void onAnimationUpdate(float value) {
+                float minValue = mFromMinValue + (mToMinValue - mFromMinValue) * value;
+                float maxValue = mFromMaxValue + (mToMaxValue - mFromMaxValue) * value;
 
-            invalidate();
-        }
-    }
-
-    private class RangeAnimationBlock extends AnimationBlock {
-
-        private final float mFromMinValue;
-        private final float mToMinValue;
-        private final float mFromMaxValue;
-        private final float mToMaxValue;
-
-        RangeAnimationBlock(float fromMinValue, float toMinValue, float fromMaxValue, float toMaxValue) {
-            mFromMinValue = fromMinValue;
-            mToMinValue = toMinValue;
-            mFromMaxValue = fromMaxValue;
-            mToMaxValue = toMaxValue;
-        }
-
-        @Override
-        void onAnimationUpdate(float value) {
-            float minValue = mFromMinValue + (mToMinValue - mFromMinValue) * value;
-            float maxValue = mFromMaxValue + (mToMaxValue - mFromMaxValue) * value;
-
-            prepareDrawData(minValue, maxValue);
-        }
-    }
-
-    private class JumpRangeAnimationBlock extends AnimationBlock {
-
-        private final float mMinValue;
-        private final float mMaxValue;
-
-        JumpRangeAnimationBlock(float minValue, float maxValue) {
-            mMinValue = minValue;
-            mMaxValue = maxValue;
-        }
-
-        @Override
-        void onAnimationStart() {
-            prepareDrawData(mMinValue, mMaxValue);
+                prepareDrawData(minValue, maxValue);
+            }
         }
     }
 }
