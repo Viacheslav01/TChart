@@ -3,24 +3,25 @@ package ru.smityukh.tchart.view;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.ArrayMap;
 import android.util.AttributeSet;
-import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import ru.smityukh.tchart.R;
 import ru.smityukh.tchart.data.ChartData;
 
 import java.text.SimpleDateFormat;
-import java.util.Locale;
-import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.*;
 
 class ChartMainView extends View {
+
+    private static final double MIN_SELECTION_CHANGE_STEP = 0.001;
 
     @Nullable
     private ChartData mChartData;
@@ -33,13 +34,14 @@ class ChartMainView extends View {
     private ChartsRender mChartsRender;
     @NonNull
     private RulersRenrer mRulersRenrer;
+    @NonNull
+    private SelectionRender mSelectionRender;
 
     private float mVisibleColumns;
     private float mPixelPerColumn;
 
     private int mFirstVisibleColumn;
     private int mLastVisibleColumn;
-    private float mOffsetX;
 
     private float mSelectionStart = 0.0f;
     private float mSelectionEnd = 1.0f;
@@ -47,9 +49,9 @@ class ChartMainView extends View {
 
     private boolean[] mChartVisible;
 
-    private static final double MIN_SELECTION_CHANGE_STEP = 0.001;
-
+    private float mOffsetX;
     private float[] mColumnPositions;
+    private int mTopPadding;
 
     public ChartMainView(Context context) {
         this(context, null, 0);
@@ -62,9 +64,54 @@ class ChartMainView extends View {
     public ChartMainView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
 
+        Resources resources = context.getResources();
+        mTopPadding = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_top_padding);
+
         mAxisRender = new AxisRender(context);
         mChartsRender = new ChartsRender(context);
         mRulersRenrer = new RulersRenrer(context);
+        mSelectionRender = new SelectionRender(context);
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        int action = event.getActionMasked();
+        switch (action) {
+            case MotionEvent.ACTION_DOWN:
+                updateSelectedColumn(event.getX() + mOffsetX);
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                updateSelectedColumn(event.getX() + mOffsetX);
+                return true;
+        }
+
+        return super.onTouchEvent(event);
+    }
+
+    private int mSelectedColumn = -1;
+
+    private void updateSelectedColumn(float x) {
+        if (mColumnPositions == null || mColumnPositions.length < 2) {
+            return;
+        }
+
+        int selectedColumn = -1;
+
+        // TODO: Replace by binary search
+        for (int columnIndex = 0; columnIndex < mColumnPositions.length - 1; columnIndex++) {
+            if (mColumnPositions[columnIndex] <= x && mColumnPositions[columnIndex + 1] >= x) {
+                if (Math.abs(x - mColumnPositions[columnIndex]) <= Math.abs(x - mColumnPositions[columnIndex + 1])) {
+                    selectedColumn = columnIndex;
+                } else {
+                    selectedColumn = columnIndex + 1;
+                }
+
+                break;
+            }
+        }
+
+        mSelectedColumn = selectedColumn;
+        mSelectionRender.prepareDraw(mSelectedColumn, getMinValue(), getMaxValue());
     }
 
     public void setChartData(@NonNull ChartData data) {
@@ -76,6 +123,7 @@ class ChartMainView extends View {
         }
 
         mChartsRender.setData(data);
+        mSelectionRender.setData(data);
 
         mSelectionStart = -1f;
         mSelectionEnd = -1f;
@@ -92,8 +140,9 @@ class ChartMainView extends View {
         super.onSizeChanged(width, height, oldw, oldh);
 
         mAxisRender.setViewHeight(height);
-        mChartsRender.setViewPort(0, width, height - mAxisRender.mAxisHeight);
-        mRulersRenrer.setViewPort(0, width, height - mAxisRender.mAxisHeight);
+        mChartsRender.setViewPort(mTopPadding, width, height - mAxisRender.mAxisHeight - mTopPadding);
+        mRulersRenrer.setViewPort(mTopPadding, width, height - mAxisRender.mAxisHeight - mTopPadding);
+        mSelectionRender.setViewPort(mTopPadding, width, height - mAxisRender.mAxisHeight - mTopPadding);
 
         onSelectionLengthChanged();
     }
@@ -120,6 +169,7 @@ class ChartMainView extends View {
             long maxValue = getMaxValue();
             mChartsRender.prepareDrawData(minValue, maxValue, mSelectionLength);
             mRulersRenrer.prepareDrawData(minValue, maxValue);
+            mSelectionRender.prepareDraw(mSelectedColumn, minValue, maxValue);
         }
 
         invalidate();
@@ -164,6 +214,7 @@ class ChartMainView extends View {
         long maxValue = getMaxValue();
         mChartsRender.prepareDrawData(minValue, maxValue, mSelectionLength);
         mRulersRenrer.prepareDrawData(minValue, maxValue);
+        mSelectionRender.prepareDraw(mSelectedColumn, minValue, maxValue);
 
         invalidate();
     }
@@ -246,6 +297,7 @@ class ChartMainView extends View {
     }
 
     private void drawSelection(Canvas canvas) {
+        mSelectionRender.draw(canvas);
     }
 
     public void setChartVisibility(int position, boolean checked) {
@@ -609,6 +661,8 @@ class ChartMainView extends View {
             for (long value : mRulers.keySet()) {
                 mRulers.put(value, (long) (value * yScale));
             }
+
+            invalidate();
         }
 
         void draw(@NonNull Canvas canvas) {
@@ -622,13 +676,264 @@ class ChartMainView extends View {
 
             for (Map.Entry<Long, Long> item : mRulers.entrySet()) {
                 canvas.scale(1, -1);
+                mRulerPaint.setAlpha(128);
                 canvas.drawLine(0, item.getValue(), mViewportWidth, item.getValue(), mRulerPaint);
 
                 canvas.scale(1, -1);
+                mRulerPaint.setAlpha(255);
                 canvas.drawText(item.getKey().toString(), 0, -item.getValue() - mBaselineOffset, mRulerPaint);
             }
 
             canvas.restore();
+        }
+    }
+
+    private class SelectionRender {
+
+        private final Paint mStrokePaint;
+        private final Paint mWhitePaint;
+        private final Paint mInfoDatePaint;
+
+        private final int mCircleRadius;
+        private final int mCircleInternalRadius;
+        private final int mDateTextSize;
+        private final int mValueTextSize;
+        private final int mNameTextSize;
+        private final int mInfoHorizontalPadding;
+        private final int mInfoVerticalPadding;
+        private final Drawable mInfoBoxBackground;
+
+        private boolean mHasDrawData;
+
+        private int mViewportTop;
+        private int mViewportWidth;
+        private int mViewportHeigth;
+
+        private float mYOffset;
+
+        private float mCircles[];
+
+        @Nullable
+        private ChartData mChartData;
+        private Paint[] mChartPaints;
+        private int mChartsCount;
+        private int mSelectedColumn;
+
+        private SimpleDateFormat mInfoDateFormat = new SimpleDateFormat("EEE, MMM dd", Locale.US);
+        private int mInfoBoxX;
+        private int mInfoBoxY;
+
+        SelectionRender(Context context) {
+
+            Resources resources = context.getResources();
+
+            int color = resources.getColor(R.color.colorAxisTextColor);
+            int rulerStrokeWidth = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_ruler_width);
+
+            mCircleRadius = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_selector_circle_radius);
+            mCircleInternalRadius = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_selector_circle_internal_radius);
+
+            mDateTextSize = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_selector_info_date_text_size);
+            mValueTextSize = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_selector_info_value_text_size);
+            mNameTextSize = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_selector_info_name_text_size);
+
+            mInfoHorizontalPadding = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_selector_info_horizontal_padding);
+            mInfoVerticalPadding = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_selector_info_vertical_padding);
+
+            mInfoBoxBackground = resources.getDrawable(R.drawable.info_box_background);
+
+            mStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            mStrokePaint.setColor(color);
+            mStrokePaint.setStrokeCap(Paint.Cap.ROUND);
+            mStrokePaint.setStrokeWidth(rulerStrokeWidth);
+
+            mWhitePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            mWhitePaint.setColor(Color.WHITE);
+
+            mInfoDatePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            mInfoDatePaint.setColor(Color.BLACK);
+            mInfoDatePaint.setTextSize(mDateTextSize);
+        }
+
+        void setViewPort(int top, int width, int heigth) {
+            if (mViewportTop == top && mViewportWidth == width && mViewportHeigth == heigth) {
+                return;
+            }
+
+            mViewportTop = top;
+            mViewportWidth = width;
+            mViewportHeigth = heigth;
+        }
+
+        void setData(@NonNull ChartData data) {
+            mChartData = data;
+
+            mChartsCount = data.mValues.length;
+            if (mChartsCount == 0) {
+                return;
+            }
+
+            mCircles = new float[mChartsCount];
+            mValueText = new String[mChartsCount];
+            mInfoBoxColumnOffset = new int[mChartsCount];
+
+            mChartPaints = new Paint[mChartsCount];
+            for (int chart = 0; chart < mChartsCount; chart++) {
+                mChartPaints[chart] = createPaint(data.mColors[chart]);
+            }
+        }
+
+        private String mInfoDateText;
+        private String mValueText[];
+        private int mInfoBoxColumnOffset[];
+        private int mInfoBoxWidth;
+        private int mInfoBoxHeight;
+
+        void prepareDraw(int selectedColumn, long minValue, long maxValue) {
+            if (mChartData == null) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            if (selectedColumn < 0 || selectedColumn >= mChartData.mAxis.length) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            long range = maxValue - minValue;
+            if (range == 0) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            mHasDrawData = true;
+
+            mSelectedColumn = selectedColumn;
+
+            float yScale = ((float) mViewportHeigth) / range;
+            mYOffset = maxValue * yScale + mViewportTop;
+
+            int boxWidth = mInfoHorizontalPadding;
+
+            for (int chartIndex = 0; chartIndex < mChartsCount; chartIndex++) {
+                long value = mChartData.mValues[chartIndex][selectedColumn];
+                mCircles[chartIndex] = value * yScale;
+                mValueText[chartIndex] = Long.toString(value);
+
+                Paint paint = mChartPaints[chartIndex];
+
+                paint.setTextSize(mValueTextSize);
+                paint.getTextBounds(mValueText[chartIndex], 0, mValueText[chartIndex].length(), mTmpRect);
+                int valueWidth = mTmpRect.width();
+
+                paint.setTextSize(mNameTextSize);
+                paint.getTextBounds(mChartData.mNames[chartIndex], 0, mChartData.mNames[chartIndex].length(), mTmpRect);
+                int nameWidth = mTmpRect.width();
+
+                mInfoBoxColumnOffset[chartIndex] = boxWidth;
+
+                boxWidth += Math.max(valueWidth, nameWidth);
+                boxWidth += mInfoHorizontalPadding;
+            }
+
+            mInfoDateText = mInfoDateFormat.format(mChartData.mAxis[mSelectedColumn]);
+            mInfoDatePaint.getTextBounds(mInfoDateText, 0, mInfoDateText.length(), mTmpRect);
+            int widthRequiredForHeader = mTmpRect.width() + mInfoHorizontalPadding * 2;
+
+            boxWidth = Math.max(widthRequiredForHeader, boxWidth);
+            mInfoBoxWidth = boxWidth;
+
+            mInfoBoxHeight = mInfoVerticalPadding
+                    + mDateTextSize
+                    + mInfoVerticalPadding
+                    + mValueTextSize
+                    + mNameTextSize / 2
+                    + mNameTextSize
+                    + mInfoVerticalPadding;
+
+            float columnX = mColumnPositions[mSelectedColumn];
+            float x = columnX - mOffsetX;
+
+            int infoBoxX = (int) (x - mInfoHorizontalPadding);
+            if (mViewportWidth - infoBoxX < mInfoBoxWidth) {
+                infoBoxX -= mInfoBoxWidth - (mViewportWidth - infoBoxX) - 1;
+            }
+
+            mInfoBoxX = Math.max(infoBoxX, 1);
+            mInfoBoxY = mViewportTop;
+
+            invalidate();
+        }
+
+        void draw(@NonNull Canvas canvas) {
+            if (!mHasDrawData) {
+                return;
+            }
+
+            float columnX = mColumnPositions[mSelectedColumn];
+
+            // Draw vertical lines
+            canvas.drawLine(columnX, mInfoBoxY + mInfoBoxHeight, columnX, mViewportTop + mViewportHeigth, mStrokePaint);
+
+            // Draw circles
+            canvas.save();
+
+            canvas.translate(0, mYOffset);
+            canvas.scale(1, -1);
+
+            for (int chartIndex = 0; chartIndex < mChartsCount; chartIndex++) {
+                float y = mCircles[chartIndex];
+
+                canvas.drawCircle(columnX, y, mCircleRadius, mChartPaints[chartIndex]);
+                canvas.drawCircle(columnX, y, mCircleInternalRadius, mWhitePaint);
+            }
+
+            canvas.restore();
+
+            // Draw info box
+            canvas.save();
+
+            canvas.translate(mOffsetX, 0);
+
+            mInfoBoxBackground.setBounds(mInfoBoxX, mInfoBoxY, mInfoBoxX + mInfoBoxWidth, mInfoBoxY + mInfoBoxHeight);
+            mInfoBoxBackground.draw(canvas);
+
+            canvas.drawText(mInfoDateText, mInfoBoxX + mInfoHorizontalPadding, mInfoBoxY + mInfoVerticalPadding + mDateTextSize, mInfoDatePaint);
+
+            int valueY = mInfoBoxY
+                    + mInfoVerticalPadding
+                    + mDateTextSize
+                    + mInfoVerticalPadding
+                    + mValueTextSize;
+
+            int nameY = valueY
+                    + mNameTextSize / 2
+                    + mNameTextSize;
+
+            for (int chartIndex = 0; chartIndex < mChartsCount; chartIndex++) {
+                Paint paint = mChartPaints[chartIndex];
+
+                paint.setTextSize(mValueTextSize);
+                canvas.drawText(mValueText[chartIndex], mInfoBoxX + mInfoBoxColumnOffset[chartIndex], valueY, paint);
+
+                paint.setTextSize(mNameTextSize);
+                canvas.drawText(mChartData.mNames[chartIndex], mInfoBoxX + mInfoBoxColumnOffset[chartIndex], nameY, paint);
+            }
+
+            canvas.restore();
+        }
+
+        @NonNull
+        private Paint createPaint(int color) {
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(color);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeWidth(3);
+
+            return paint;
         }
     }
 }

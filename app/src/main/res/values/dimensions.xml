@@ -9,6 +9,19 @@
     <dimen name="chart_main_view_axis_text_size">14sp</dimen>
     <dimen name="chart_main_view_axis_text_vertical_padding">12dp</dimen>
 
+    <dimen name="chart_main_view_chart_top_padding">8dp</dimen>
+
     <dimen name="chart_main_view_chart_line_width">2dp</dimen>
     <dimen name="chart_main_view_chart_ruler_width">1dp</dimen>
+
+    <dimen name="chart_main_view_chart_selector_circle_radius">5dp</dimen>
+    <dimen name="chart_main_view_chart_selector_circle_internal_radius">3dp</dimen>
+
+    <dimen name="chart_main_view_chart_selector_info_date_text_size">15sp</dimen>
+    <dimen name="chart_main_view_chart_selector_info_value_text_size">17sp</dimen>
+    <dimen name="chart_main_view_chart_selector_info_name_text_size">14sp</dimen>
+
+    <dimen name="chart_main_view_chart_selector_info_horizontal_padding">12dp</dimen>
+    <dimen name="chart_main_view_chart_selector_info_vertical_padding">8dp</dimen>
+
 </resources>
