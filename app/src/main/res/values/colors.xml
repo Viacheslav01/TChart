@@ -8,4 +8,5 @@
     <color name="colorSelectedPeriodFrame">#26325A96</color>
 
     <color name="colorAxisTextColor">#96A2AA</color>
+    <color name="colorAxisRulerColor">#d5dadd</color>
 </resources>

@@ -7,18 +7,17 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.support.annotation.FloatRange;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.view.animation.FastOutSlowInInterpolator;
 import android.util.ArrayMap;
-import android.util.ArraySet;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
+import android.view.animation.LinearInterpolator;
 import ru.smityukh.tchart.R;
 import ru.smityukh.tchart.animation.FloatAnimationWrapper;
 import ru.smityukh.tchart.data.ChartData;
@@ -29,6 +28,7 @@ import java.util.*;
 class ChartMainView extends View {
 
     private static final double MIN_SELECTION_CHANGE_STEP = 0.001;
+    private static final long ANIMATION_DURATION_MS = 250;
 
     @Nullable
     private ChartData mChartData;
@@ -40,7 +40,7 @@ class ChartMainView extends View {
     @NonNull
     private ChartsRender mChartsRender;
     @NonNull
-    private RulersRenrer mRulersRenrer;
+    private RulersRender mRulersRender;
     @NonNull
     private SelectionRender mSelectionRender;
 
@@ -60,6 +60,12 @@ class ChartMainView extends View {
     private float[] mColumnPositions;
     private int mTopPadding;
 
+    private float mLastMinValue;
+    private float mLastMaxValue;
+
+    @Nullable
+    private RangeAnimation mRangeAnimation;
+
     public ChartMainView(Context context) {
         this(context, null, 0);
     }
@@ -76,7 +82,7 @@ class ChartMainView extends View {
 
         mAxisRender = new AxisRender(context);
         mChartsRender = new ChartsRender(context);
-        mRulersRenrer = new RulersRenrer(context);
+        mRulersRender = new RulersRender(context);
         mSelectionRender = new SelectionRender(context);
     }
 
@@ -132,14 +138,19 @@ class ChartMainView extends View {
         mChartsRender.setData(data);
         mSelectionRender.setData(data);
 
+        int width = getWidth();
+        int height = getHeight();
+
+        mAxisRender.setViewHeight(height);
+        mChartsRender.setViewPort(mTopPadding, width, height - mAxisRender.mAxisHeight - mTopPadding);
+        mRulersRender.setViewPort(mTopPadding, width, height - mAxisRender.mAxisHeight - mTopPadding);
+        mSelectionRender.setViewPort(mTopPadding, width, height - mAxisRender.mAxisHeight - mTopPadding);
+
         mSelectionStart = -1f;
         mSelectionEnd = -1f;
         mSelectionLength = -1f;
+
         setSelection(0f, 1f);
-
-        mAxisRender.setViewHeight(getHeight());
-
-        onSelectionLengthChanged();
     }
 
     @Override
@@ -148,7 +159,7 @@ class ChartMainView extends View {
 
         mAxisRender.setViewHeight(height);
         mChartsRender.setViewPort(mTopPadding, width, height - mAxisRender.mAxisHeight - mTopPadding);
-        mRulersRenrer.setViewPort(mTopPadding, width, height - mAxisRender.mAxisHeight - mTopPadding);
+        mRulersRender.setViewPort(mTopPadding, width, height - mAxisRender.mAxisHeight - mTopPadding);
         mSelectionRender.setViewPort(mTopPadding, width, height - mAxisRender.mAxisHeight - mTopPadding);
 
         onSelectionLengthChanged();
@@ -175,29 +186,13 @@ class ChartMainView extends View {
 
             mSelectedColumn = -1;
 
-            long minValue = getMinValue();
-            long maxValue = getMaxValue();
-            mChartsRender.prepareDrawData(minValue, maxValue, mSelectionLength);
-            mRulersRenrer.prepareDrawData(minValue, maxValue);
-            mSelectionRender.prepareDraw(mSelectedColumn, minValue, maxValue);
+            RangeAnimation animation = createRangeAnimation();
+            if (animation != null) {
+                animation.start();
+            }
         }
 
         invalidate();
-    }
-
-    private void updateVisibleColumnsInfo() {
-        if (mChartData == null || getWidth() <= 0) {
-            return;
-        }
-
-        mVisibleColumns = mChartData.mAxis.length * mSelectionLength;
-        mPixelPerColumn = getWidth() / mVisibleColumns;
-
-        mFirstVisibleColumn = (int) Math.ceil(mChartData.mAxis.length * mSelectionStart);
-        mLastVisibleColumn = (int) Math.ceil(mFirstVisibleColumn + mVisibleColumns);
-        mLastVisibleColumn = Math.min(mLastVisibleColumn, mChartData.mAxis.length - 1);
-
-        mOffsetX = mPixelPerColumn * mChartData.mAxis.length * mSelectionStart;
     }
 
     private void onSelectionLengthChanged() {
@@ -222,13 +217,27 @@ class ChartMainView extends View {
 
         mSelectedColumn = -1;
 
-        long minValue = getMinValue();
-        long maxValue = getMaxValue();
-        mChartsRender.prepareDrawData(minValue, maxValue, mSelectionLength);
-        mRulersRenrer.prepareDrawData(minValue, maxValue);
-        mSelectionRender.prepareDraw(mSelectedColumn, minValue, maxValue);
+        RangeAnimation animation = createRangeAnimation();
+        if (animation != null) {
+            animation.start();
+        }
 
         invalidate();
+    }
+
+    private void updateVisibleColumnsInfo() {
+        if (mChartData == null || getWidth() <= 0) {
+            return;
+        }
+
+        mVisibleColumns = mChartData.mAxis.length * mSelectionLength;
+        mPixelPerColumn = getWidth() / mVisibleColumns;
+
+        mFirstVisibleColumn = (int) Math.ceil(mChartData.mAxis.length * mSelectionStart);
+        mLastVisibleColumn = (int) Math.ceil(mFirstVisibleColumn + mVisibleColumns);
+        mLastVisibleColumn = Math.min(mLastVisibleColumn, mChartData.mAxis.length - 1);
+
+        mOffsetX = mPixelPerColumn * mChartData.mAxis.length * mSelectionStart;
     }
 
     private long getMinValue() {
@@ -301,7 +310,7 @@ class ChartMainView extends View {
     }
 
     private void drawRullers(Canvas canvas) {
-        mRulersRenrer.draw(canvas);
+        mRulersRender.draw(canvas);
     }
 
     private void drawCharts(Canvas canvas) {
@@ -315,10 +324,97 @@ class ChartMainView extends View {
     public void setChartVisibility(int position, boolean checked) {
         if (mChartsVisibility != null) {
             mChartsVisibility[position] = checked;
+            mChartsRender.setChartVisibility(position, checked);
 
-            mChartsRender.prepareDrawData(getMinValue(), getMaxValue(), mSelectionLength);
-            mRulersRenrer.prepareDrawData(getMinValue(), getMaxValue());
-            mSelectionRender.prepareDraw(mSelectedColumn, getMinValue(), getMaxValue());
+            RangeAnimation animation = createRangeAnimation();
+            if (animation != null) {
+                animation.start();
+            }
+        }
+    }
+
+    private void onPreMinMaxChanged(float minValue, float maxValue) {
+        mRulersRender.updateRulers(minValue, maxValue);
+    }
+
+    private void onMinMaxChanged(float minValue, float maxValue) {
+        mLastMinValue = minValue;
+        mLastMaxValue = maxValue;
+
+        mChartsRender.prepareDrawData(minValue, maxValue, mSelectionLength);
+        mRulersRender.updateDrawData(minValue, maxValue);
+        mSelectionRender.prepareDraw(mSelectedColumn, (int) minValue, (int) maxValue);
+    }
+
+    @Nullable
+    private RangeAnimation createRangeAnimation() {
+        float minValue = getMinValue();
+        float maxValue = getMaxValue();
+
+        if (mRangeAnimation != null) {
+            if (mRangeAnimation.mToMinValue == minValue && mRangeAnimation.mToMaxValue == maxValue) {
+                return null;
+            }
+
+            mRangeAnimation.cancel();
+        }
+
+        if (Float.compare(minValue, 0.0f) == 0 && Float.compare(maxValue, 0.0f) == 0) {
+            // Min and max value have to be changed to zero so we can change it without a smooth animation
+            onPreMinMaxChanged(minValue, maxValue);
+            onMinMaxChanged(minValue, maxValue);
+            return null;
+        }
+
+        if (Float.compare(mLastMinValue, 0.0f) == 0 && Float.compare(mLastMaxValue, 0.0f) == 0) {
+            // Last min and max values was zero so we can change it without a smooth animation
+            onPreMinMaxChanged(minValue, maxValue);
+            onMinMaxChanged(minValue, maxValue);
+            return null;
+        }
+
+        mRangeAnimation = new RangeAnimation(mLastMinValue, minValue, mLastMaxValue, maxValue);
+        return mRangeAnimation;
+    }
+
+    private class RangeAnimation extends FloatAnimationWrapper {
+        private final float mFromMinValue;
+        private final float mToMinValue;
+        private final float mFromMaxValue;
+        private final float mToMaxValue;
+
+        RangeAnimation(float fromMinValue, float toMinValue, float fromMaxValue, float toMaxValue) {
+            super(0.0f, 1.0f);
+
+            mFromMinValue = fromMinValue;
+            mToMinValue = toMinValue;
+            mFromMaxValue = fromMaxValue;
+            mToMaxValue = toMaxValue;
+
+            setDuration(ANIMATION_DURATION_MS);
+            setInterpolator(new LinearInterpolator());
+        }
+
+        @Override
+        protected void onAnimationStart() {
+            onPreMinMaxChanged(mToMinValue, mToMaxValue);
+        }
+
+        @Override
+        protected void onAnimationFinished(boolean canceled) {
+            mRangeAnimation = null;
+
+            if (!canceled) {
+                onMinMaxChanged(getMinValue(), getMaxValue());
+            }
+        }
+
+        @Override
+        protected void onAnimationUpdate(float value) {
+            float minValue = mFromMinValue + (mToMinValue - mFromMinValue) * value;
+            float maxValue = mFromMaxValue + (mToMaxValue - mFromMaxValue) * value;
+
+            onMinMaxChanged(minValue, maxValue);
         }
     }
 
@@ -477,9 +573,9 @@ class ChartMainView extends View {
 
             int mAlpha;
 
-            public ShowLabelsAnimation() {
+            ShowLabelsAnimation() {
                 super(0, 1);
-                setDuration(250);
+                setDuration(ANIMATION_DURATION_MS);
                 setInterpolator(new AccelerateInterpolator());
             }
 
@@ -497,6 +593,7 @@ class ChartMainView extends View {
             @Override
             protected void onAnimationUpdate(float animatedValue) {
                 mAlpha = (int) (255 * animatedValue);
+                invalidate();
             }
         }
 
@@ -508,7 +605,7 @@ class ChartMainView extends View {
 
             HideLabelsAnimation(@NonNull SortedMap<Integer, String> labels) {
                 super(1, 0);
-                setDuration(250);
+                setDuration(ANIMATION_DURATION_MS);
                 setInterpolator(new DecelerateInterpolator());
 
                 mColumnLabels = labels;
@@ -541,6 +638,7 @@ class ChartMainView extends View {
 
         private float[] mLines;
         private Paint[] mChartPaints;
+        private AlphaAnimation[] mAlphaAnimations;
 
         private int mChartsCount;
         private int mColumnsCount;
@@ -577,6 +675,10 @@ class ChartMainView extends View {
         void setData(@NonNull ChartData data) {
             mChartData = data;
 
+            mLastMinValue = 0;
+            mLastMaxValue = 0;
+            mLastSelectionLength = 0;
+
             mChartsCount = data.mValues.length;
             if (mChartsCount == 0) {
                 return;
@@ -595,9 +697,15 @@ class ChartMainView extends View {
             for (int chart = 0; chart < mChartsCount; chart++) {
                 mChartPaints[chart] = createChartPaint(data.mColors[chart]);
             }
+
+            mAlphaAnimations = new AlphaAnimation[mChartsCount];
         }
 
-        private void prepareDrawData(float minValue, float maxValue, float selectionLength) {
+        void setChartVisibility(int chartIndex, boolean visible) {
+            createAlphaAnimation(chartIndex, visible).start();
+        }
+
+        void prepareDrawData(float minValue, float maxValue, float selectionLength) {
             if (mViewportWidth <= 0 || mViewportHeigth <= 0) {
                 mHasDrawData = false;
                 invalidate();
@@ -670,12 +778,11 @@ class ChartMainView extends View {
 
             int lineOffset = 0;
             for (int index = 0; index < mChartsCount; index++) {
-                if (mChartsVisibility[index]) {
+                if (mChartsVisibility[index] || mAlphaAnimations[index] != null) {
                     int offset = (lineOffset + mFirstVisibleColumn) << 2;
                     int count = (mLastVisibleColumn - mFirstVisibleColumn) << 2;
 
                     canvas.drawLines(mLines, offset, count, mChartPaints[index]);
-                    //canvas.drawLines(mLines, lineOffset << 2, mLinesCount << 2, mChartPaints[index]);
                 }
 
                 lineOffset += mLinesCount;
@@ -683,7 +790,6 @@ class ChartMainView extends View {
 
             canvas.restore();
         }
-
 
         @NonNull
         private Paint createChartPaint(int color) {
@@ -694,11 +800,81 @@ class ChartMainView extends View {
 
             return paint;
         }
+
+        @NonNull
+        private AlphaAnimation createAlphaAnimation(int position, boolean visible) {
+            AlphaAnimation alphaAnimation = mAlphaAnimations[position];
+            if (alphaAnimation == null || (!alphaAnimation.isStarted() && !alphaAnimation.isRunning())) {
+                alphaAnimation = new AlphaAnimation(position, visible);
+            } else {
+                alphaAnimation.cancel();
+
+                float currentValue = ((float) mChartPaints[position].getAlpha()) / 255;
+                alphaAnimation = new AlphaAnimation(position, visible, currentValue);
+            }
+
+            mAlphaAnimations[position] = alphaAnimation;
+            return alphaAnimation;
+        }
+
+        private class AlphaAnimation extends FloatAnimationWrapper {
+            private final int mPosition;
+            private final boolean mVisible;
+            private final float mInitValue;
+
+            AlphaAnimation(int position, boolean visible) {
+                this(position, visible, visible ? 0.0f : 1.0f);
+            }
+
+            AlphaAnimation(int position, boolean visible, @FloatRange(from = 0.0f, to = 1.0f) float initValue) {
+                super(0.0f, 1.0f);
+
+                mPosition = position;
+                mVisible = visible;
+                mInitValue = initValue;
+
+                long duration = (long) (visible ? ANIMATION_DURATION_MS * (1 - initValue) : ANIMATION_DURATION_MS * initValue);
+                setDuration(duration);
+                setInterpolator(new AccelerateDecelerateInterpolator());
+            }
+
+            @Override
+            protected void onAnimationStart() {
+                mChartPaints[mPosition].setAlpha((int) (255 * mInitValue));
+            }
+
+            @Override
+            protected void onAnimationFinished(boolean canceled) {
+                mAlphaAnimations[mPosition] = null;
+
+                if (!canceled) {
+                    mChartPaints[mPosition].setAlpha(255);
+                    invalidate();
+                }
+            }
+
+            @Override
+            protected void onAnimationUpdate(float value) {
+                float piece = mVisible ? 1.0f - mInitValue : mInitValue;
+
+                int alpha = 255;
+                if (mVisible) {
+                    alpha *= mInitValue + piece * value;
+                } else {
+                    alpha *= mInitValue - piece * value;
+                }
+
+                mChartPaints[mPosition].setAlpha(alpha);
+                invalidate();
+            }
+        }
     }
 
-    private class RulersRenrer {
+    private class RulersRender {
 
         private final Paint mRulerPaint;
+        private final Paint mTextPaint;
+
         private final int mBaselineOffset;
 
         private boolean mHasDrawData;
@@ -713,21 +889,29 @@ class ChartMainView extends View {
 
         private float mYOffset;
 
-        RulersRenrer(@NonNull Context context) {
+        @Nullable
+        private ShowRulersAnimation mShowRulersAnimation;
+        @NonNull
+        private List<HideRulersAnimation> mRetiredRullers = new ArrayList<>();
+
+        RulersRender(@NonNull Context context) {
 
             Resources resources = context.getResources();
-            int color = resources.getColor(R.color.colorAxisTextColor);
+            int textColor = resources.getColor(R.color.colorAxisTextColor);
+            int lineColor = resources.getColor(R.color.colorAxisRulerColor);
             int rulerStrokeWidth = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_ruler_width);
             int textSize = resources.getDimensionPixelSize(R.dimen.chart_main_view_axis_text_size);
 
-            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            paint.setColor(color);
-            paint.setStrokeCap(Paint.Cap.ROUND);
-            paint.setStrokeWidth(rulerStrokeWidth);
-            paint.setTextSize(textSize);
+            mRulerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            mRulerPaint.setColor(lineColor);
+            mRulerPaint.setStrokeCap(Paint.Cap.ROUND);
+            mRulerPaint.setStrokeWidth(rulerStrokeWidth);
+
+            mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            mTextPaint.setColor(textColor);
+            mTextPaint.setTextSize(textSize);
 
             mBaselineOffset = textSize / 2;
-            mRulerPaint = paint;
         }
 
         void setViewPort(int top, int width, int heigth) {
@@ -740,16 +924,57 @@ class ChartMainView extends View {
             mViewportHeigth = heigth;
         }
 
-        void prepareDrawData(long minValue, long maxValue) {
-            long range = maxValue - minValue;
-            if (range == 0) {
-                mHasDrawData = false;
-                invalidate();
+        void updateRulers(float minValue, float maxValue) {
+            float range = maxValue - minValue;
+            if (Float.compare(range, 0f) == 0) {
+                mRulers = null;
                 return;
             }
 
             long step = (long) Math.ceil((range * 0.8) / 5);
             if (step == 0) {
+                mRulers = null;
+                return;
+            }
+
+            if (!(Math.abs(((float) mCurrentStep) / step - 1) > 0.05)) {
+                return;
+            }
+
+            // In case of time I have a search a nice step
+
+            if (mShowRulersAnimation != null) {
+                mShowRulersAnimation.cancel();
+            }
+
+            if (mRulers != null) {
+                HideRulersAnimation hideAnimation = new HideRulersAnimation(mRulers);
+                mRetiredRullers.add(hideAnimation);
+                hideAnimation.start();
+
+                mShowRulersAnimation = new ShowRulersAnimation();
+                mShowRulersAnimation.start();
+            }
+
+            mRulers = new ArrayMap<>();
+            long value = 0;
+            for (int i = 0; i <= 5; i++) {
+                mRulers.put(value, 0L);
+                value += step;
+            }
+
+            mCurrentStep = step;
+        }
+
+        void updateDrawData(float minValue, float maxValue) {
+            if (mRulers == null) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            float range = maxValue - minValue;
+            if (Float.compare(range, 0f) == 0) {
                 mHasDrawData = false;
                 invalidate();
                 return;
@@ -757,20 +982,7 @@ class ChartMainView extends View {
 
             mHasDrawData = true;
 
-            // In case of time I have a search a nice step
-            if (Math.abs(((float) mCurrentStep) / step - 1) > 0.05) {
-                mRulers = new ArrayMap<>();
-                long value = 0;
-                for (int i = 0; i <= 5; i++) {
-                    mRulers.put(value, 0l);
-                    value += step;
-                }
-
-                mCurrentStep = step;
-            }
-
             float yScale = ((float) mViewportHeigth) / range;
-
             mYOffset = maxValue * yScale + mViewportTop;
 
             for (long value : mRulers.keySet()) {
@@ -785,21 +997,98 @@ class ChartMainView extends View {
                 return;
             }
 
+            int alpha = mShowRulersAnimation != null ? mShowRulersAnimation.mAlpha : 255;
+            mRulerPaint.setAlpha(alpha);
+            mTextPaint.setAlpha(alpha);
+
             canvas.save();
 
             canvas.translate(mOffsetX, mYOffset);
 
             for (Map.Entry<Long, Long> item : mRulers.entrySet()) {
                 canvas.scale(1, -1);
-                mRulerPaint.setAlpha(128);
                 canvas.drawLine(0, item.getValue(), mViewportWidth, item.getValue(), mRulerPaint);
 
                 canvas.scale(1, -1);
-                mRulerPaint.setAlpha(255);
-                canvas.drawText(item.getKey().toString(), 0, -item.getValue() - mBaselineOffset, mRulerPaint);
+                canvas.drawText(item.getKey().toString(), 0, -item.getValue() - mBaselineOffset, mTextPaint);
+            }
+
+            for (int index = 0; index < mRetiredRullers.size(); index++) {
+                HideRulersAnimation animation = mRetiredRullers.get(index);
+
+                mRulerPaint.setAlpha(animation.mAlpha);
+                mTextPaint.setAlpha(animation.mAlpha);
+
+                for (Map.Entry<Long, Long> item : animation.mRulers.entrySet()) {
+                    canvas.scale(1, -1);
+                    canvas.drawLine(0, item.getValue(), mViewportWidth, item.getValue(), mRulerPaint);
+
+                    canvas.scale(1, -1);
+                    canvas.drawText(item.getKey().toString(), 0, -item.getValue() - mBaselineOffset, mTextPaint);
+                }
             }
 
             canvas.restore();
+        }
+
+        private class ShowRulersAnimation extends FloatAnimationWrapper {
+
+            int mAlpha;
+
+            ShowRulersAnimation() {
+                super(0, 1);
+                setDuration(ANIMATION_DURATION_MS);
+                setInterpolator(new AccelerateInterpolator());
+            }
+
+            @Override
+            protected void onAnimationStart() {
+                mAlpha = 0;
+            }
+
+            @Override
+            protected void onAnimationFinished(boolean canceled) {
+                mShowRulersAnimation = null;
+                invalidate();
+            }
+
+            @Override
+            protected void onAnimationUpdate(float animatedValue) {
+                mAlpha = (int) (255 * animatedValue);
+                invalidate();
+            }
+        }
+
+        private class HideRulersAnimation extends FloatAnimationWrapper {
+
+            @NonNull
+            Map<Long, Long> mRulers;
+            int mAlpha;
+
+            HideRulersAnimation(@NonNull Map<Long, Long> rulers) {
+                super(1, 0);
+                setDuration(ANIMATION_DURATION_MS);
+                setInterpolator(new DecelerateInterpolator());
+
+                mRulers = rulers;
+            }
+
+            @Override
+            protected void onAnimationStart() {
+                mAlpha = 255;
+            }
+
+            @Override
+            protected void onAnimationFinished(boolean canceled) {
+                mRetiredRullers.remove(this);
+                invalidate();
+            }
+
+            @Override
+            protected void onAnimationUpdate(float animatedValue) {
+                mAlpha = (int) (255 * animatedValue);
+                invalidate();
+            }
         }
     }
 
@@ -847,7 +1136,7 @@ class ChartMainView extends View {
 
             Resources resources = context.getResources();
 
-            int color = resources.getColor(R.color.colorAxisTextColor);
+            int color = resources.getColor(R.color.colorAxisRulerColor);
             int rulerStrokeWidth = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_ruler_width);
 
             mCircleRadius = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_selector_circle_radius);

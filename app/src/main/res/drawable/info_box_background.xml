@@ -7,7 +7,7 @@
             <solid android:color="#ffffff"/>
 
             <stroke
-                    android:color="@color/colorAxisTextColor"
+                    android:color="@color/colorAxisRulerColor"
                     android:width="@dimen/chart_main_view_chart_ruler_width"/>
 
             <corners
