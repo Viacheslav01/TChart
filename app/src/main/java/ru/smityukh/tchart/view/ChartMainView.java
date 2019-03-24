@@ -3,7 +3,6 @@ package ru.smityukh.tchart.view;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
@@ -1095,7 +1094,7 @@ class ChartMainView extends View {
     private class SelectionRender {
 
         private final Paint mStrokePaint;
-        private final Paint mWhitePaint;
+        private final Paint mInternalCirclePaint;
         private final Paint mInfoDatePaint;
 
         private final int mCircleRadius;
@@ -1156,11 +1155,11 @@ class ChartMainView extends View {
             mStrokePaint.setStrokeCap(Paint.Cap.ROUND);
             mStrokePaint.setStrokeWidth(rulerStrokeWidth);
 
-            mWhitePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            mWhitePaint.setColor(Color.WHITE);
+            mInternalCirclePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            mInternalCirclePaint.setColor(resources.getColor(R.color.columnInfoBoxInternalCircle));
 
             mInfoDatePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            mInfoDatePaint.setColor(Color.BLACK);
+            mInfoDatePaint.setColor(resources.getColor(R.color.columnInfoBoxHeader));
             mInfoDatePaint.setTextSize(mDateTextSize);
         }
 
@@ -1305,7 +1304,7 @@ class ChartMainView extends View {
                 float y = mCircles[chartIndex];
 
                 canvas.drawCircle(columnX, y, mCircleRadius, mChartPaints[chartIndex]);
-                canvas.drawCircle(columnX, y, mCircleInternalRadius, mWhitePaint);
+                canvas.drawCircle(columnX, y, mCircleInternalRadius, mInternalCirclePaint);
             }
 
             canvas.restore();

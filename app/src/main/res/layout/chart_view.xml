@@ -9,7 +9,8 @@
             android:layout_height="wrap_content"
             android:textSize="17sp"
             android:text="Followers"
-            android:textColor="#3896d4"/>
+            android:paddingTop="8dp"
+            android:textColor="@color/chartNameColor"/>
 
     <ru.smityukh.tchart.view.ChartMainView
             android:id="@+id/chart_main"

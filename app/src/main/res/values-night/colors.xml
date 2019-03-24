@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#212d3b</color>
+    <color name="colorPrimaryDark">#1a242e</color>
+    <color name="colorAccent">#D81B60</color>
+
+    <color name="colorUnselectedPeriodYashmak">#B219232e</color>
+    <color name="colorSelectedPeriodFrame">#265582aa</color>
+
+    <color name="colorAxisTextColor">#506372</color>
+    <color name="colorAxisRulerColor">#131c26</color>
+
+    <color name="chartNameColor">#7bc4fb</color>
+
+    <color name="columnInfoBoxBackground">#202b38</color>
+
+    <color name="columnInfoBoxHeader">#eeeeee</color>
+    <color name="columnInfoBoxInternalCircle">#1d2733</color>
+</resources>

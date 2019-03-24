@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="window">#1d2733</color>
+
     <color name="colorPrimary">#517da2</color>
     <color name="colorPrimaryDark">#426382</color>
     <color name="colorAccent">#D81B60</color>
@@ -9,4 +11,11 @@
 
     <color name="colorAxisTextColor">#96A2AA</color>
     <color name="colorAxisRulerColor">#d5dadd</color>
+
+    <color name="chartNameColor">#3896d4</color>
+
+    <color name="columnInfoBoxBackground">#ffffff</color>
+
+    <color name="columnInfoBoxHeader">#111111</color>
+    <color name="columnInfoBoxInternalCircle">#ffffff</color>
 </resources>

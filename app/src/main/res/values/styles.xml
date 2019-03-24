@@ -2,15 +2,16 @@
 
     <attr name="chartViewStyle" format="reference"/>
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!-- Customize your theme here. -->
+    <style name="AppThemeBase" parent="Theme.AppCompat.DayNight.DarkActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
         <item name="chartViewStyle">@style/ChartView</item>
     </style>
-    
+
+    <style name="AppTheme" parent="AppThemeBase">
+    </style>
+
     <style name="ChartView">
         <item name="android:paddingLeft">@dimen/chart_view_horizontal_padding</item>
         <item name="android:paddingRight">@dimen/chart_view_horizontal_padding</item>
