@@ -9,11 +9,18 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.view.animation.FastOutSlowInInterpolator;
 import android.util.ArrayMap;
+import android.util.ArraySet;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.AccelerateDecelerateInterpolator;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
 import ru.smityukh.tchart.R;
+import ru.smityukh.tchart.animation.FloatAnimationWrapper;
 import ru.smityukh.tchart.data.ChartData;
 
 import java.text.SimpleDateFormat;
@@ -331,8 +338,15 @@ class ChartMainView extends View {
 
         private SimpleDateFormat dateFormat = new SimpleDateFormat("MMM dd", Locale.US);
 
+        private int mCurrentLabelsCount;
+
+        @Nullable
+        private ShowLabelsAnimation mShowLabelsAnimation;
+
         @Nullable
         private SortedMap<Integer, String> mColumnLabels;
+        @NonNull
+        private List<HideLabelsAnimation> mRetiredLabels = new ArrayList<>();
 
         AxisRender(@NonNull Context context) {
             Resources resources = context.getResources();
@@ -383,15 +397,35 @@ class ChartMainView extends View {
             mAxisFirstLabeledColumn = firstLabeledColumn;
             mAxisLabelStep = labelStep;
 
-            mColumnLabels = new TreeMap<>();
 
             int lastLabeledColumn = columnsCount - 1 - firstLabeledColumn;
 
             int columnRange = lastLabeledColumn - firstLabeledColumn;
             int labelsCount = columnRange / labelStep;
+
+            if (mCurrentLabelsCount == labelsCount) {
+                return;
+            }
+            mCurrentLabelsCount = labelsCount;
+
             float columnsPerLabel = labelsCount != 0
                     ? ((float) columnRange) / labelsCount
                     : 1;
+
+            if (mShowLabelsAnimation != null) {
+                mShowLabelsAnimation.end();
+            }
+
+            if (mColumnLabels != null) {
+                HideLabelsAnimation hideAnimation = new HideLabelsAnimation(mColumnLabels);
+                mRetiredLabels.add(hideAnimation);
+                hideAnimation.start();
+
+                mShowLabelsAnimation = new ShowLabelsAnimation();
+                mShowLabelsAnimation.start();
+            }
+
+            mColumnLabels = new TreeMap<>();
 
             for (float labelColumn = firstLabeledColumn + columnsPerLabel; labelColumn < lastLabeledColumn; labelColumn += columnsPerLabel) {
                 mColumnLabels.put(Math.round(labelColumn), dateFormat.format(axisData[Math.round(labelColumn)]));
@@ -417,10 +451,84 @@ class ChartMainView extends View {
             int firstLabeledColumn = mFirstVisibleColumn - mAxisLabelStep;
             int lastLabeledColumn = mLastVisibleColumn + mAxisLabelStep;
 
+            int alpha = mShowLabelsAnimation != null ? mShowLabelsAnimation.mAlpha : 255;
+            mAxisTextPaint.setAlpha(alpha);
+
             SortedMap<Integer, String> visibleColumnsMap = mColumnLabels.subMap(firstLabeledColumn, lastLabeledColumn);
             for (Map.Entry<Integer, String> item : visibleColumnsMap.entrySet()) {
                 float columnx = mColumnPositions[item.getKey()];
                 canvas.drawText(item.getValue(), columnx, mLabelY, mAxisTextPaint);
+            }
+
+            for (int index = 0; index < mRetiredLabels.size(); index++) {
+                HideLabelsAnimation animation = mRetiredLabels.get(index);
+
+                mAxisTextPaint.setAlpha(animation.mAlpha);
+
+                visibleColumnsMap = animation.mColumnLabels.subMap(firstLabeledColumn, lastLabeledColumn);
+                for (Map.Entry<Integer, String> item : visibleColumnsMap.entrySet()) {
+                    float columnx = mColumnPositions[item.getKey()];
+                    canvas.drawText(item.getValue(), columnx, mLabelY, mAxisTextPaint);
+                }
+            }
+        }
+
+        private class ShowLabelsAnimation extends FloatAnimationWrapper {
+
+            int mAlpha;
+
+            public ShowLabelsAnimation() {
+                super(0, 1);
+                setDuration(250);
+                setInterpolator(new AccelerateInterpolator());
+            }
+
+            @Override
+            protected void onAnimationStart() {
+                mAlpha = 0;
+            }
+
+            @Override
+            protected void onAnimationFinished(boolean canceled) {
+                mShowLabelsAnimation = null;
+                invalidate();
+            }
+
+            @Override
+            protected void onAnimationUpdate(float animatedValue) {
+                mAlpha = (int) (255 * animatedValue);
+            }
+        }
+
+        private class HideLabelsAnimation extends FloatAnimationWrapper {
+
+            @NonNull
+            SortedMap<Integer, String> mColumnLabels;
+            int mAlpha;
+
+            HideLabelsAnimation(@NonNull SortedMap<Integer, String> labels) {
+                super(1, 0);
+                setDuration(250);
+                setInterpolator(new DecelerateInterpolator());
+
+                mColumnLabels = labels;
+            }
+
+            @Override
+            protected void onAnimationStart() {
+                mAlpha = 255;
+            }
+
+            @Override
+            protected void onAnimationFinished(boolean canceled) {
+                mRetiredLabels.remove(this);
+                invalidate();
+            }
+
+            @Override
+            protected void onAnimationUpdate(float animatedValue) {
+                mAlpha = (int) (255 * animatedValue);
+                invalidate();
             }
         }
     }
