@@ -7,6 +7,7 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.util.ArrayMap;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
@@ -30,6 +31,8 @@ class ChartMainView extends View {
     private AxisRender mAxisRender;
     @NonNull
     private ChartsRender mChartsRender;
+    @NonNull
+    private RulersRenrer mRulersRenrer;
 
     private float mVisibleColumns;
     private float mPixelPerColumn;
@@ -61,6 +64,7 @@ class ChartMainView extends View {
 
         mAxisRender = new AxisRender(context);
         mChartsRender = new ChartsRender(context);
+        mRulersRenrer = new RulersRenrer(context);
     }
 
     public void setChartData(@NonNull ChartData data) {
@@ -89,6 +93,7 @@ class ChartMainView extends View {
 
         mAxisRender.setViewHeight(height);
         mChartsRender.setViewPort(0, width, height - mAxisRender.mAxisHeight);
+        mRulersRenrer.setViewPort(0, width, height - mAxisRender.mAxisHeight);
 
         onSelectionLengthChanged();
     }
@@ -111,7 +116,10 @@ class ChartMainView extends View {
             onSelectionLengthChanged();
         } else {
             updateVisibleColumnsInfo();
-            mChartsRender.prepareDrawData(getMinValue(), getMaxValue(), mSelectionLength);
+            long minValue = getMinValue();
+            long maxValue = getMaxValue();
+            mChartsRender.prepareDrawData(minValue, maxValue, mSelectionLength);
+            mRulersRenrer.prepareDrawData(minValue, maxValue);
         }
 
         invalidate();
@@ -151,7 +159,11 @@ class ChartMainView extends View {
         }
 
         mAxisRender.updateDrawData(mVisibleColumns, mPixelPerColumn);
-        mChartsRender.prepareDrawData(getMinValue(), getMaxValue(), mSelectionLength);
+
+        long minValue = getMinValue();
+        long maxValue = getMaxValue();
+        mChartsRender.prepareDrawData(minValue, maxValue, mSelectionLength);
+        mRulersRenrer.prepareDrawData(minValue, maxValue);
 
         invalidate();
     }
@@ -226,7 +238,7 @@ class ChartMainView extends View {
     }
 
     private void drawRullers(Canvas canvas) {
-
+        mRulersRenrer.draw(canvas);
     }
 
     private void drawCharts(Canvas canvas) {
@@ -240,6 +252,7 @@ class ChartMainView extends View {
         if (mChartVisible != null) {
             mChartVisible[position] = checked;
             mChartsRender.prepareDrawData(getMinValue(), getMaxValue(), mSelectionLength);
+            mRulersRenrer.prepareDrawData(getMinValue(), getMaxValue());
         }
     }
 
@@ -513,6 +526,109 @@ class ChartMainView extends View {
             paint.setStrokeWidth(mShartLineWidth);
 
             return paint;
+        }
+    }
+
+    private class RulersRenrer {
+
+        private final Paint mRulerPaint;
+        private final int mBaselineOffset;
+
+        private boolean mHasDrawData;
+
+        private long mCurrentStep;
+
+        Map<Long, Long> mRulers;
+
+        private int mViewportTop;
+        private int mViewportWidth;
+        private int mViewportHeigth;
+
+        private float mYOffset;
+
+        RulersRenrer(@NonNull Context context) {
+
+            Resources resources = context.getResources();
+            int color = resources.getColor(R.color.colorAxisTextColor);
+            int rulerStrokeWidth = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_ruler_width);
+            int textSize = resources.getDimensionPixelSize(R.dimen.chart_main_view_axis_text_size);
+
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(color);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeWidth(rulerStrokeWidth);
+            paint.setTextSize(textSize);
+
+            mBaselineOffset = textSize / 2;
+            mRulerPaint = paint;
+        }
+
+        void setViewPort(int top, int width, int heigth) {
+            if (mViewportTop == top && mViewportWidth == width && mViewportHeigth == heigth) {
+                return;
+            }
+
+            mViewportTop = top;
+            mViewportWidth = width;
+            mViewportHeigth = heigth;
+        }
+
+        void prepareDrawData(long minValue, long maxValue) {
+            long range = maxValue - minValue;
+            if (range == 0) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            long step = (long) Math.ceil((range * 0.8) / 5);
+            if (step == 0) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            mHasDrawData = true;
+
+            // In case of time I have a search a nice step
+            if (Math.abs(((float) mCurrentStep) / step - 1) > 0.05) {
+                mRulers = new ArrayMap<>();
+                long value = 0;
+                for (int i = 0; i <= 5; i++) {
+                    mRulers.put(value, 0l);
+                    value += step;
+                }
+
+                mCurrentStep = step;
+            }
+
+            float yScale = ((float) mViewportHeigth) / range;
+
+            mYOffset = maxValue * yScale + mViewportTop;
+
+            for (long value : mRulers.keySet()) {
+                mRulers.put(value, (long) (value * yScale));
+            }
+        }
+
+        void draw(@NonNull Canvas canvas) {
+            if (!mHasDrawData) {
+                return;
+            }
+
+            canvas.save();
+
+            canvas.translate(mOffsetX, mYOffset);
+
+            for (Map.Entry<Long, Long> item : mRulers.entrySet()) {
+                canvas.scale(1, -1);
+                canvas.drawLine(0, item.getValue(), mViewportWidth, item.getValue(), mRulerPaint);
+
+                canvas.scale(1, -1);
+                canvas.drawText(item.getKey().toString(), 0, -item.getValue() - mBaselineOffset, mRulerPaint);
+            }
+
+            canvas.restore();
         }
     }
 }

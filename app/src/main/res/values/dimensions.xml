@@ -10,4 +10,5 @@
     <dimen name="chart_main_view_axis_text_vertical_padding">12dp</dimen>
 
     <dimen name="chart_main_view_chart_line_width">2dp</dimen>
+    <dimen name="chart_main_view_chart_ruler_width">1dp</dimen>
 </resources>
