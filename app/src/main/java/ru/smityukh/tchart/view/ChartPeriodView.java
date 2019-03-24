@@ -117,6 +117,18 @@ class ChartPeriodView extends View {
         mChartsRender.setChartVisibility(position, visible);
     }
 
+    void setSelection(float start, float end) {
+        mSelectionController.setSelection(start, end);
+    }
+
+    float getStart() {
+        return mSelectionController.getStart();
+    }
+
+    float getEnd() {
+        return mSelectionController.getEnd();
+    }
+
     private class SelectionController {
 
         private static final double MIN_SELECTION_CHANGE_STEP = 0.001;

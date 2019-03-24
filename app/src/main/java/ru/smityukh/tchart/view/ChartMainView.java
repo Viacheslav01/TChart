@@ -6,11 +6,14 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.os.Parcel;
+import android.os.Parcelable;
 import android.support.annotation.FloatRange;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.ArrayMap;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.AccelerateDecelerateInterpolator;
@@ -62,6 +65,8 @@ class ChartMainView extends View {
     private float mLastMinValue;
     private float mLastMaxValue;
 
+    private int mSelectedColumn = -1;
+
     @Nullable
     private RangeAnimation mRangeAnimation;
 
@@ -99,8 +104,6 @@ class ChartMainView extends View {
 
         return super.onTouchEvent(event);
     }
-
-    private int mSelectedColumn = -1;
 
     private void updateSelectedColumn(float x) {
         if (mColumnPositions == null || mColumnPositions.length < 2) {

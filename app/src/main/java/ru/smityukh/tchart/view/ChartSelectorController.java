@@ -51,6 +51,18 @@ public class ChartSelectorController {
         return mAdapter.mCheckedItems.clone();
     }
 
+    void setCheckedState(int position, boolean checked) {
+        if (mAdapter == null) {
+            return;
+        }
+
+        if (position >= mAdapter.mCheckedItems.length) {
+            return;
+        }
+
+        mAdapter.onCheckedChanged(position, checked);
+    }
+
     private void onCheckedChanged(int position, boolean checked) {
         if (mOnCheckedChangedCallback != null) {
             mOnCheckedChangedCallback.onCheckedChanged(position, checked);
