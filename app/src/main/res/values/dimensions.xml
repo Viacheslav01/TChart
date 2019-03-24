@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <resources>
+    <dimen name="chart_view_horizontal_padding">16dp</dimen>
+
     <dimen name="period_selector_view_line_width">1dp</dimen>
     <dimen name="period_selector_view_vertical_chart_offset">3dp</dimen>
     <dimen name="period_selector_view_frame_horizontal_line_height">1dp</dimen>

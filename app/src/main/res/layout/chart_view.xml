@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<android.widget.LinearLayout
-        xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical" android:paddingLeft="16dp" android:paddingRight="16dp">
+<merge xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
+       android:layout_height="match_parent">
 
     <TextView
             android:id="@+id/chart_header"
@@ -11,7 +9,7 @@
             android:layout_height="wrap_content"
             android:textSize="17sp"
             android:text="Followers"
-            android:textColor="#389694"/>
+            android:textColor="#3896d4"/>
 
     <ru.smityukh.tchart.view.ChartMainView
             android:id="@+id/chart_main"
@@ -32,4 +30,4 @@
             android:layout_height="0dp"
             android:layout_weight="1"/>
 
-</android.widget.LinearLayout>
+</merge>

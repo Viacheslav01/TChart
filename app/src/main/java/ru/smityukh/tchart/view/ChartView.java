@@ -32,7 +32,7 @@ public class ChartView extends LinearLayout {
     }
 
     public ChartView(Context context, @Nullable AttributeSet attrs) {
-        super(context, attrs);
+        super(context, attrs, R.attr.chartViewStyle);
         init(context);
     }
 
@@ -43,6 +43,7 @@ public class ChartView extends LinearLayout {
 
     private void init(Context context) {
         inflate(context, R.layout.chart_view, this);
+        setOrientation(VERTICAL);
         mController = new Controller();
     }
 
