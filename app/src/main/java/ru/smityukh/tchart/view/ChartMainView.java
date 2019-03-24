@@ -8,6 +8,7 @@ import android.graphics.Rect;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.View;
 import ru.smityukh.tchart.R;
 import ru.smityukh.tchart.data.ChartData;
@@ -22,13 +23,13 @@ class ChartMainView extends View {
 
     @Nullable
     private ChartData mChartData;
-    @Nullable
-    private MainChartsRender mChartsRender;
 
     private Rect mTmpRect = new Rect();
 
     @NonNull
     private AxisRender mAxisRender;
+    @NonNull
+    private ChartsRender mChartsRender;
 
     private float mVisibleColumns;
     private float mPixelPerColumn;
@@ -36,6 +37,16 @@ class ChartMainView extends View {
     private int mFirstVisibleColumn;
     private int mLastVisibleColumn;
     private float mOffsetX;
+
+    private float mSelectionStart = 0.0f;
+    private float mSelectionEnd = 1.0f;
+    private float mSelectionLength = 1.0f;
+
+    private boolean[] mChartVisible;
+
+    private static final double MIN_SELECTION_CHANGE_STEP = 0.001;
+
+    private float[] mColumnPositions;
 
     public ChartMainView(Context context) {
         this(context, null, 0);
@@ -49,15 +60,18 @@ class ChartMainView extends View {
         super(context, attrs, defStyleAttr);
 
         mAxisRender = new AxisRender(context);
+        mChartsRender = new ChartsRender(context);
     }
 
     public void setChartData(@NonNull ChartData data) {
         mChartData = data;
 
-        mChartsRender = new MainChartsRender(data, this);
-        mChartsRender.setLineWidth(6);
-        mChartsRender.setVerticalChartOffset(0);
-        mChartsRender.setViewSize(getWidth(), getHeight());
+        mChartVisible = new boolean[mChartData.mValues.length];
+        for (int chartIndex = 0; chartIndex < mChartVisible.length; chartIndex++) {
+            mChartVisible[chartIndex] = true;
+        }
+
+        mChartsRender.setData(data);
 
         mSelectionStart = -1f;
         mSelectionEnd = -1f;
@@ -73,22 +87,11 @@ class ChartMainView extends View {
     protected void onSizeChanged(int width, int height, int oldw, int oldh) {
         super.onSizeChanged(width, height, oldw, oldh);
 
-        if (mChartsRender != null) {
-            mChartsRender.setViewSize(width, height);
-        }
-
         mAxisRender.setViewHeight(height);
+        mChartsRender.setViewPort(0, width, height - mAxisRender.mAxisHeight);
 
         onSelectionLengthChanged();
     }
-
-    private float mSelectionStart = 0.0f;
-    private float mSelectionEnd = 1.0f;
-    private float mSelectionLength = 1.0f;
-
-    private static final double MIN_SELECTION_CHANGE_STEP = 0.001;
-
-    private float[] mColumnPositions;
 
     public void setSelection(float start, float end) {
         if (Float.compare(mSelectionStart, start) == 0 && Float.compare(mSelectionEnd, end) == 0) {
@@ -108,6 +111,7 @@ class ChartMainView extends View {
             onSelectionLengthChanged();
         } else {
             updateVisibleColumnsInfo();
+            mChartsRender.prepareDrawData(getMinValue(), getMaxValue(), mSelectionLength);
         }
 
         invalidate();
@@ -123,6 +127,7 @@ class ChartMainView extends View {
 
         mFirstVisibleColumn = (int) Math.ceil(mChartData.mAxis.length * mSelectionStart);
         mLastVisibleColumn = (int) Math.ceil(mFirstVisibleColumn + mVisibleColumns);
+        mLastVisibleColumn = Math.min(mLastVisibleColumn, mChartData.mAxis.length - 1);
 
         mOffsetX = mPixelPerColumn * mChartData.mAxis.length * mSelectionStart;
     }
@@ -146,8 +151,59 @@ class ChartMainView extends View {
         }
 
         mAxisRender.updateDrawData(mVisibleColumns, mPixelPerColumn);
+        mChartsRender.prepareDrawData(getMinValue(), getMaxValue(), mSelectionLength);
 
         invalidate();
+    }
+
+    private long getMinValue() {
+        if (mChartData == null) {
+            return 0;
+        }
+
+        return 0;
+        // Disabled in case to show 0 line everywhere
+//        long minValue = Long.MAX_VALUE;
+//        for (int chartIndex = 0; chartIndex < mChartData.mValues.length; chartIndex++) {
+//            if (!mChartVisible[chartIndex]) {
+//                continue;
+//            }
+//
+//            long[] values = mChartData.mValues[chartIndex];
+//
+//            for (int column = mFirstVisibleColumn; column <= mLastVisibleColumn; column++) {
+//                if (values[column] < minValue) {
+//                    minValue = values[column];
+//                }
+//            }
+//        }
+//
+//        return minValue != Long.MAX_VALUE ? minValue : 0;
+    }
+
+    // TODO: replace by tree to enhance O(N) to O(log N)?
+    // For current data set the current version is quite quick
+    private long getMaxValue() {
+        if (mChartData == null) {
+            return 0;
+        }
+
+        long maxValue = Long.MIN_VALUE;
+        for (int chartIndex = 0; chartIndex < mChartData.mValues.length; chartIndex++) {
+            if (!mChartVisible[chartIndex]) {
+                continue;
+            }
+
+            long[] values = mChartData.mValues[chartIndex];
+
+            for (int column = mFirstVisibleColumn; column <= mLastVisibleColumn; column++) {
+                if (values[column] > maxValue) {
+                    maxValue = values[column];
+                }
+            }
+        }
+
+        return maxValue != Long.MIN_VALUE ? maxValue : 0;
     }
 
     @Override
@@ -174,17 +230,16 @@ class ChartMainView extends View {
     }
 
     private void drawCharts(Canvas canvas) {
-        if (mChartsRender != null) {
-            //mChartsRender.render(canvas);
-        }
+        mChartsRender.draw(canvas);
     }
 
     private void drawSelection(Canvas canvas) {
     }
 
     public void setChartVisibility(int position, boolean checked) {
-        if (mChartsRender != null) {
-            mChartsRender.setChartVisibility(position, checked);
+        if (mChartVisible != null) {
+            mChartVisible[position] = checked;
+            mChartsRender.prepareDrawData(getMinValue(), getMaxValue(), mSelectionLength);
         }
     }
 
@@ -295,6 +350,169 @@ class ChartMainView extends View {
                 float columnx = mColumnPositions[item.getKey()];
                 canvas.drawText(item.getValue(), columnx, mLabelY, mAxisTextPaint);
             }
+        }
+    }
+
+    private class ChartsRender {
+
+        private final int mShartLineWidth;
+        @Nullable
+        private ChartData mChartData;
+
+        private float[] mLines;
+        private Paint[] mChartPaints;
+
+        private int mChartsCount;
+        private int mColumnsCount;
+        private int mLinesCount;
+
+        private int mViewportTop;
+        private int mViewportWidth;
+        private int mViewportHeigth;
+
+        private float mYOffset;
+
+        private boolean mHasDrawData;
+
+        private float mLastMinValue;
+        private float mLastMaxValue;
+        private float mLastSelectionLength;
+
+        ChartsRender(@NonNull Context context) {
+            Resources resources = context.getResources();
+
+            mShartLineWidth = resources.getDimensionPixelSize(R.dimen.chart_main_view_chart_line_width);
+        }
+
+        void setViewPort(int top, int width, int heigth) {
+            if (mViewportTop == top && mViewportWidth == width && mViewportHeigth == heigth) {
+                return;
+            }
+
+            mViewportTop = top;
+            mViewportWidth = width;
+            mViewportHeigth = heigth;
+        }
+
+        void setData(@NonNull ChartData data) {
+            mChartData = data;
+
+            mChartsCount = data.mValues.length;
+            if (mChartsCount == 0) {
+                return;
+            }
+
+            mColumnsCount = data.mAxis.length;
+            if (mColumnsCount == 0) {
+                return;
+            }
+            mLinesCount = mColumnsCount - 1;
+
+            // Full size lines buffer to avoid an unnecessary GC work
+            mLines = new float[mLinesCount * mChartsCount * 4];
+
+            mChartPaints = new Paint[mChartsCount];
+            for (int chart = 0; chart < mChartsCount; chart++) {
+                mChartPaints[chart] = createChartPaint(data.mColors[chart]);
+            }
+        }
+
+        private void prepareDrawData(float minValue, float maxValue, float selectionLength) {
+            if (mViewportWidth <= 0 || mViewportHeigth <= 0) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            if (mChartData == null || mChartsCount < 1 || mColumnsCount < 2) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            if (mLastMinValue == minValue && mLastMaxValue == maxValue && mLastSelectionLength == selectionLength) {
+                // Nothing changed
+                invalidate();
+                return;
+            }
+
+            mLastMinValue = minValue;
+            mLastMaxValue = maxValue;
+            mLastSelectionLength = selectionLength;
+
+            float range = maxValue - minValue;
+            if (Float.compare(range, 0.0f) == 0) {
+                mHasDrawData = false;
+                invalidate();
+                return;
+            }
+
+            float yScale = ((float) mViewportHeigth) / range;
+
+            mYOffset = maxValue * yScale + mViewportTop;
+
+            int linePosition = 0;
+
+            for (int chart = 0; chart < mChartsCount; chart++) {
+                long[] values = mChartData.mValues[chart];
+
+                // Extract  the first line to remove float a multiplication from cycle
+                mLines[linePosition] = mColumnPositions[0];
+                mLines[linePosition + 1] = values[0] * yScale;
+                mLines[linePosition + 2] = mColumnPositions[1];
+                mLines[linePosition + 3] = values[1] * yScale;
+
+                linePosition += 4;
+
+                for (int column = 1; column < mLinesCount; column++) {
+                    mLines[linePosition] = mColumnPositions[column];
+                    mLines[linePosition + 1] = mLines[linePosition - 1];
+                    mLines[linePosition + 2] = mColumnPositions[column + 1];
+                    mLines[linePosition + 3] = values[column + 1] * yScale;
+
+                    linePosition += 4;
+                }
+            }
+
+            mHasDrawData = true;
+            invalidate();
+        }
+
+        void draw(@NonNull Canvas canvas) {
+            if (!mHasDrawData) {
+                return;
+            }
+
+            canvas.save();
+
+            canvas.translate(0, mYOffset);
+            canvas.scale(1, -1);
+
+            int lineOffset = 0;
+            for (int index = 0; index < mChartsCount; index++) {
+                if (mChartVisible[index]) {
+                    int offset = (lineOffset + mFirstVisibleColumn) << 2;
+                    int count = (mLastVisibleColumn - mFirstVisibleColumn) << 2;
+
+                    canvas.drawLines(mLines, offset, count, mChartPaints[index]);
+                    //canvas.drawLines(mLines, lineOffset << 2, mLinesCount << 2, mChartPaints[index]);
+                }
+
+                lineOffset += mLinesCount;
+            }
+
+            canvas.restore();
+        }
+
+
+        @NonNull
+        private Paint createChartPaint(int color) {
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setColor(color);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeWidth(mShartLineWidth);
+
+            return paint;
         }
     }
 }
