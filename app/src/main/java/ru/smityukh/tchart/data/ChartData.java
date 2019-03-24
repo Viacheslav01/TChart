@@ -1,6 +1,10 @@
 package ru.smityukh.tchart.data;
 
 import android.support.annotation.NonNull;
+import android.widget.Toast;
+
+import java.io.IOException;
+import java.util.List;
 
 public final class ChartData {
     @NonNull

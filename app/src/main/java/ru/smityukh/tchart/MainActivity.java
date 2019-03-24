@@ -1,5 +1,6 @@
 package ru.smityukh.tchart;
 
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
@@ -14,6 +15,7 @@ import java.io.IOException;
 import java.util.List;
 
 import ru.smityukh.tchart.data.ChartData;
+import ru.smityukh.tchart.data.ChartDataSingleton;
 import ru.smityukh.tchart.data.DataReader;
 import ru.smityukh.tchart.data.WrongChartDataJsonException;
 import ru.smityukh.tchart.view.ChartView;
@@ -21,29 +23,37 @@ import ru.smityukh.tchart.view.ChartView;
 public class MainActivity extends AppCompatActivity {
 
     private static final String NIGHT_MODE_PREF_KEY = "NIGHT_MODE_PREF_KEY";
+    private static final String CHART_INDEX_EXTRA = "CHART_INDEX_EXTRA";
+    private int mChartIndex;
+
+    public static Intent createIntent(Context context, int chartIndex) {
+        Intent intent = new Intent(context, MainActivity.class);
+        intent.putExtra(CHART_INDEX_EXTRA, chartIndex);
+        return intent;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         AppCompatDelegate.setDefaultNightMode(getNightMode());
 
         setContentView(R.layout.activity_main);
 
-        DataReader dataReader = new DataReader();
-        List<ChartData> chartData = null;
-        try {
-            chartData = dataReader.readData(this);
-        } catch (IOException | WrongChartDataJsonException | IllegalStateException ex) {
-            Toast.makeText(this, ex.getMessage(), Toast.LENGTH_LONG).show();
+        Intent intent = getIntent();
+        if (intent == null) {
+            finish();
+            return;
         }
+
+        mChartIndex = intent.getIntExtra(CHART_INDEX_EXTRA, 0);
+        List<ChartData> chartData = ChartDataSingleton.getChartData(this);
 
         if (chartData == null) {
             return;
         }
 
         ChartView periodView = findViewById(R.id.chart_view);
-        periodView.setData(chartData.get(0));
+        periodView.setData(chartData.get(mChartIndex));
     }
 
     @Override
@@ -62,7 +72,7 @@ public class MainActivity extends AppCompatActivity {
                 saveNightMode(AppCompatDelegate.MODE_NIGHT_YES);
             }
 
-            startActivity(new Intent(this, getClass()));
+            startActivity(createIntent(this, mChartIndex));
             overridePendingTransition(0, 0);
             finish();
 
