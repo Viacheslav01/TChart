@@ -37,6 +37,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         ChartView periodView = findViewById(R.id.chart_view);
-        periodView.setData(chartData.get(1));
+        periodView.setData(chartData.get(0));
     }
 }

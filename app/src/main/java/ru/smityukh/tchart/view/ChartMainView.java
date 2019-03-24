@@ -47,7 +47,7 @@ class ChartMainView extends View {
     private float mSelectionEnd = 1.0f;
     private float mSelectionLength = 1.0f;
 
-    private boolean[] mChartVisible;
+    private boolean[] mChartsVisibility;
 
     private float mOffsetX;
     private float[] mColumnPositions;
@@ -117,9 +117,9 @@ class ChartMainView extends View {
     public void setChartData(@NonNull ChartData data) {
         mChartData = data;
 
-        mChartVisible = new boolean[mChartData.mValues.length];
-        for (int chartIndex = 0; chartIndex < mChartVisible.length; chartIndex++) {
-            mChartVisible[chartIndex] = true;
+        mChartsVisibility = new boolean[mChartData.mValues.length];
+        for (int chartIndex = 0; chartIndex < mChartsVisibility.length; chartIndex++) {
+            mChartsVisibility[chartIndex] = true;
         }
 
         mChartsRender.setData(data);
@@ -165,6 +165,9 @@ class ChartMainView extends View {
             onSelectionLengthChanged();
         } else {
             updateVisibleColumnsInfo();
+
+            mSelectedColumn = -1;
+
             long minValue = getMinValue();
             long maxValue = getMaxValue();
             mChartsRender.prepareDrawData(minValue, maxValue, mSelectionLength);
@@ -210,6 +213,8 @@ class ChartMainView extends View {
 
         mAxisRender.updateDrawData(mVisibleColumns, mPixelPerColumn);
 
+        mSelectedColumn = -1;
+
         long minValue = getMinValue();
         long maxValue = getMaxValue();
         mChartsRender.prepareDrawData(minValue, maxValue, mSelectionLength);
@@ -228,7 +233,7 @@ class ChartMainView extends View {
         // Disabled in case to show 0 line everywhere
 //        long minValue = Long.MAX_VALUE;
 //        for (int chartIndex = 0; chartIndex < mChartData.mValues.length; chartIndex++) {
-//            if (!mChartVisible[chartIndex]) {
+//            if (!mChartsVisibility[chartIndex]) {
 //                continue;
 //            }
 //
@@ -253,7 +258,7 @@ class ChartMainView extends View {
 
         long maxValue = Long.MIN_VALUE;
         for (int chartIndex = 0; chartIndex < mChartData.mValues.length; chartIndex++) {
-            if (!mChartVisible[chartIndex]) {
+            if (!mChartsVisibility[chartIndex]) {
                 continue;
             }
 
@@ -301,10 +306,12 @@ class ChartMainView extends View {
     }
 
     public void setChartVisibility(int position, boolean checked) {
-        if (mChartVisible != null) {
-            mChartVisible[position] = checked;
+        if (mChartsVisibility != null) {
+            mChartsVisibility[position] = checked;
+
             mChartsRender.prepareDrawData(getMinValue(), getMaxValue(), mSelectionLength);
             mRulersRenrer.prepareDrawData(getMinValue(), getMaxValue());
+            mSelectionRender.prepareDraw(mSelectedColumn, getMinValue(), getMaxValue());
         }
     }
 
@@ -555,7 +562,7 @@ class ChartMainView extends View {
 
             int lineOffset = 0;
             for (int index = 0; index < mChartsCount; index++) {
-                if (mChartVisible[index]) {
+                if (mChartsVisibility[index]) {
                     int offset = (lineOffset + mFirstVisibleColumn) << 2;
                     int count = (mLastVisibleColumn - mFirstVisibleColumn) << 2;
 
@@ -720,8 +727,13 @@ class ChartMainView extends View {
         private int mSelectedColumn;
 
         private SimpleDateFormat mInfoDateFormat = new SimpleDateFormat("EEE, MMM dd", Locale.US);
-        private int mInfoBoxX;
-        private int mInfoBoxY;
+        private int mInfoBoxLeft;
+        private int mInfoBoxTop;
+        private int mInfoBoxRight;
+        private int mInfoBoxBottom;
+        private int mInfoBoxHeaderOffsetY;
+        private int mInfoBoxValueOffsetY;
+        private int mInfoBoxNameOffsetY;
 
         SelectionRender(Context context) {
 
@@ -796,6 +808,8 @@ class ChartMainView extends View {
                 return;
             }
 
+            mSelectedColumn = selectedColumn;
+
             if (selectedColumn < 0 || selectedColumn >= mChartData.mAxis.length) {
                 mHasDrawData = false;
                 invalidate();
@@ -811,14 +825,16 @@ class ChartMainView extends View {
 
             mHasDrawData = true;
 
-            mSelectedColumn = selectedColumn;
-
             float yScale = ((float) mViewportHeigth) / range;
             mYOffset = maxValue * yScale + mViewportTop;
 
             int boxWidth = mInfoHorizontalPadding;
 
             for (int chartIndex = 0; chartIndex < mChartsCount; chartIndex++) {
+                if (!mChartsVisibility[chartIndex]) {
+                    continue;
+                }
+
                 long value = mChartData.mValues[chartIndex][selectedColumn];
                 mCircles[chartIndex] = value * yScale;
                 mValueText[chartIndex] = Long.toString(value);
@@ -846,14 +862,6 @@ class ChartMainView extends View {
             boxWidth = Math.max(widthRequiredForHeader, boxWidth);
             mInfoBoxWidth = boxWidth;
 
-            mInfoBoxHeight = mInfoVerticalPadding
-                    + mDateTextSize
-                    + mInfoVerticalPadding
-                    + mValueTextSize
-                    + mNameTextSize / 2
-                    + mNameTextSize
-                    + mInfoVerticalPadding;
-
             float columnX = mColumnPositions[mSelectedColumn];
             float x = columnX - mOffsetX;
 
@@ -862,8 +870,16 @@ class ChartMainView extends View {
                 infoBoxX -= mInfoBoxWidth - (mViewportWidth - infoBoxX) - 1;
             }
 
-            mInfoBoxX = Math.max(infoBoxX, 1);
-            mInfoBoxY = mViewportTop;
+            mInfoBoxHeaderOffsetY = mInfoBoxTop + mInfoVerticalPadding + mDateTextSize;
+            mInfoBoxValueOffsetY = mInfoBoxHeaderOffsetY + mInfoVerticalPadding + mValueTextSize;
+            mInfoBoxNameOffsetY = mInfoBoxValueOffsetY + mNameTextSize / 2 + mNameTextSize;
+
+            mInfoBoxHeight = mInfoBoxNameOffsetY + mInfoVerticalPadding;
+
+            mInfoBoxLeft = Math.max(infoBoxX, 1);
+            mInfoBoxTop = mViewportTop;
+            mInfoBoxRight = mInfoBoxLeft + mInfoBoxWidth;
+            mInfoBoxBottom = mInfoBoxTop + mInfoBoxHeight;
 
             invalidate();
         }
@@ -876,7 +892,7 @@ class ChartMainView extends View {
             float columnX = mColumnPositions[mSelectedColumn];
 
             // Draw vertical lines
-            canvas.drawLine(columnX, mInfoBoxY + mInfoBoxHeight, columnX, mViewportTop + mViewportHeigth, mStrokePaint);
+            canvas.drawLine(columnX, mInfoBoxBottom, columnX, mViewportTop + mViewportHeigth, mStrokePaint);
 
             // Draw circles
             canvas.save();
@@ -885,6 +901,10 @@ class ChartMainView extends View {
             canvas.scale(1, -1);
 
             for (int chartIndex = 0; chartIndex < mChartsCount; chartIndex++) {
+                if (!mChartsVisibility[chartIndex]) {
+                    continue;
+                }
+
                 float y = mCircles[chartIndex];
 
                 canvas.drawCircle(columnX, y, mCircleRadius, mChartPaints[chartIndex]);
@@ -898,29 +918,23 @@ class ChartMainView extends View {
 
             canvas.translate(mOffsetX, 0);
 
-            mInfoBoxBackground.setBounds(mInfoBoxX, mInfoBoxY, mInfoBoxX + mInfoBoxWidth, mInfoBoxY + mInfoBoxHeight);
+            mInfoBoxBackground.setBounds(mInfoBoxLeft, mInfoBoxTop, mInfoBoxRight, mInfoBoxBottom);
             mInfoBoxBackground.draw(canvas);
 
-            canvas.drawText(mInfoDateText, mInfoBoxX + mInfoHorizontalPadding, mInfoBoxY + mInfoVerticalPadding + mDateTextSize, mInfoDatePaint);
-
-            int valueY = mInfoBoxY
-                    + mInfoVerticalPadding
-                    + mDateTextSize
-                    + mInfoVerticalPadding
-                    + mValueTextSize;
-
-            int nameY = valueY
-                    + mNameTextSize / 2
-                    + mNameTextSize;
+            canvas.drawText(mInfoDateText, mInfoBoxLeft + mInfoHorizontalPadding, mInfoBoxHeaderOffsetY, mInfoDatePaint);
 
             for (int chartIndex = 0; chartIndex < mChartsCount; chartIndex++) {
+                if (!mChartsVisibility[chartIndex]) {
+                    continue;
+                }
+
                 Paint paint = mChartPaints[chartIndex];
 
                 paint.setTextSize(mValueTextSize);
-                canvas.drawText(mValueText[chartIndex], mInfoBoxX + mInfoBoxColumnOffset[chartIndex], valueY, paint);
+                canvas.drawText(mValueText[chartIndex], mInfoBoxLeft + mInfoBoxColumnOffset[chartIndex], mInfoBoxValueOffsetY, paint);
 
                 paint.setTextSize(mNameTextSize);
-                canvas.drawText(mChartData.mNames[chartIndex], mInfoBoxX + mInfoBoxColumnOffset[chartIndex], nameY, paint);
+                canvas.drawText(mChartData.mNames[chartIndex], mInfoBoxLeft + mInfoBoxColumnOffset[chartIndex], mInfoBoxNameOffsetY, paint);
             }
 
             canvas.restore();
